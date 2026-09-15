@@ -1,0 +1,286 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ==========================================================================
+   RFP Studio — the Kognoz design system
+   ==========================================================================
+   Chrome is neutral; colour is meaning.
+     Kognoz Blue  (#005184)  = human judgement & action
+     Teal         (#2B9E85)  = machine intelligence & signal (AI drafts, citations, confidence)
+     Green        (#71A247)  = ONLY approved / fully compliant / success
+     Amber                   = partial, low confidence, flagged
+     Red                     = not supported, errors
+   Never two brand colours on one element. The logo gradient
+   (#005184 → #32B2CE → #79EBB4) appears in exactly two places: the mark and
+   the drafting progress bar. Hex values are the brand source of truth; the
+   defaults below equal the Kognoz brand, and a workspace's brand_templates row
+   may override the --brand-* custom properties at runtime (see <BrandStyle/>).
+   ========================================================================== */
+
+:root {
+  /* Brand */
+  --brand-blue: #005184;
+  --brand-blue-deep: #003d63;
+  --brand-teal: #2b9e85;
+  --brand-green: #71a247;
+  --brand-cyan: #32b2ce;
+  --brand-mint: #79ebb4;
+  --brand-gradient: linear-gradient(99.4deg, var(--brand-blue) 9.42%, var(--brand-cyan) 65.01%, var(--brand-mint) 98.66%);
+
+  /* Neutrals (from kognozconsulting.com) */
+  --ink: #232628;
+  --paper: #fafafa;
+  --surface: #ffffff;
+  --panel: #f1f4f7;
+  --line: #e3e8ee;
+  --line-strong: #d3dbe3;
+  --muted-ink: #5f6b76;
+  --faint-ink: #8c98a4;
+
+  /* Meaning — text on a tinted background. */
+  --meaning-blue-text: #005184;
+  --meaning-blue-bg: #e5f1f4;
+  --meaning-teal-text: #1f7a67;
+  --meaning-teal-bg: #e4f4f0;
+  --meaning-green-text: #4f7a1b;
+  --meaning-green-bg: #edf4e3;
+  --meaning-amber-text: #9a4a08;
+  --meaning-amber-bg: #fdf1e0;
+  --meaning-red-text: #b3261e;
+  --meaning-red-bg: #fbe9e7;
+  --meaning-neutral-text: #4b5560;
+  --meaning-neutral-bg: #eef1f4;
+
+  /* shadcn semantic tokens, aliased to the grammar above */
+  --background: var(--paper);
+  --foreground: var(--ink);
+  --card: var(--surface);
+  --card-foreground: var(--ink);
+  --popover: var(--surface);
+  --popover-foreground: var(--ink);
+  --primary: var(--brand-blue);
+  --primary-foreground: #ffffff;
+  --secondary: #eaf1f6;
+  --secondary-foreground: var(--brand-blue-deep);
+  --muted: var(--panel);
+  --muted-foreground: var(--muted-ink);
+  --accent: #eaf1f6;
+  --accent-foreground: var(--brand-blue-deep);
+  --destructive: #c0392b;
+  --border: var(--line);
+  --input: var(--line-strong);
+  --ring: var(--brand-blue);
+  --chart-1: var(--brand-blue);
+  --chart-2: var(--brand-teal);
+  --chart-3: var(--brand-green);
+  --chart-4: var(--brand-cyan);
+  --chart-5: #d08a2e;
+  --radius: 0.5rem;
+  --sidebar: var(--surface);
+  --sidebar-foreground: var(--ink);
+  --sidebar-primary: var(--brand-blue);
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #eaf1f6;
+  --sidebar-accent-foreground: var(--brand-blue-deep);
+  --sidebar-border: var(--line);
+  --sidebar-ring: var(--brand-blue);
+}
+
+/* Late shift — ink becomes the surface, paper becomes the text; the grammar is unchanged. */
+.dark {
+  --ink: #eef4f8;
+  --paper: #0b1620;
+  --surface: #101e2b;
+  --panel: #17283a;
+  --line: #1f3446;
+  --line-strong: #2a4256;
+  --muted-ink: #9fb4c2;
+  --faint-ink: #6f8797;
+
+  --brand-blue-deep: #7cc0ea;
+
+  --meaning-blue-text: #8ccbf0;
+  --meaning-blue-bg: #0f2b40;
+  --meaning-teal-text: #6fd1b8;
+  --meaning-teal-bg: #10302a;
+  --meaning-green-text: #a3cc63;
+  --meaning-green-bg: #1b2b16;
+  --meaning-amber-text: #f0b35a;
+  --meaning-amber-bg: #33240f;
+  --meaning-red-text: #f08a7c;
+  --meaning-red-bg: #3a1712;
+  --meaning-neutral-text: #b7c3cd;
+  --meaning-neutral-bg: #1d2c3a;
+
+  --background: var(--paper);
+  --foreground: var(--ink);
+  --card: var(--surface);
+  --card-foreground: var(--ink);
+  --popover: var(--surface);
+  --popover-foreground: var(--ink);
+  --primary: #4a9fd4;
+  --primary-foreground: #06131c;
+  --secondary: #17324a;
+  --secondary-foreground: #cfe6f6;
+  --muted: var(--panel);
+  --muted-foreground: var(--muted-ink);
+  --accent: #17324a;
+  --accent-foreground: #cfe6f6;
+  --destructive: #e26d5c;
+  --border: var(--line);
+  --input: var(--line-strong);
+  --ring: #4a9fd4;
+  --chart-1: #4a9fd4;
+  --chart-2: #4fc3a6;
+  --chart-3: #a3cc63;
+  --chart-4: #5ccbe3;
+  --chart-5: #e0a04c;
+  --sidebar: #0e1a26;
+  --sidebar-foreground: var(--ink);
+  --sidebar-primary: #4a9fd4;
+  --sidebar-primary-foreground: #06131c;
+  --sidebar-accent: #17324a;
+  --sidebar-accent-foreground: #cfe6f6;
+  --sidebar-border: var(--line);
+  --sidebar-ring: #4a9fd4;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Brand + meaning, usable as bg-brand-blue, text-meaning-teal-text, etc. */
+  --color-brand-blue: var(--brand-blue);
+  --color-brand-blue-deep: var(--brand-blue-deep);
+  --color-brand-teal: var(--brand-teal);
+  --color-brand-green: var(--brand-green);
+  --color-brand-cyan: var(--brand-cyan);
+  --color-brand-mint: var(--brand-mint);
+  --color-ink: var(--ink);
+  --color-paper: var(--paper);
+  --color-surface: var(--surface);
+  --color-panel: var(--panel);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-muted-ink: var(--muted-ink);
+  --color-faint-ink: var(--faint-ink);
+  --color-meaning-blue-text: var(--meaning-blue-text);
+  --color-meaning-blue-bg: var(--meaning-blue-bg);
+  --color-meaning-teal-text: var(--meaning-teal-text);
+  --color-meaning-teal-bg: var(--meaning-teal-bg);
+  --color-meaning-green-text: var(--meaning-green-text);
+  --color-meaning-green-bg: var(--meaning-green-bg);
+  --color-meaning-amber-text: var(--meaning-amber-text);
+  --color-meaning-amber-bg: var(--meaning-amber-bg);
+  --color-meaning-red-text: var(--meaning-red-text);
+  --color-meaning-red-bg: var(--meaning-red-bg);
+  --color-meaning-neutral-text: var(--meaning-neutral-text);
+  --color-meaning-neutral-bg: var(--meaning-neutral-bg);
+
+  /* Typography — the variables are set on <html> by next/font in app/layout.tsx. */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-heading: var(--font-poppins), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", Menlo, monospace;
+  --text-ui: 0.8125rem;            /* 13px — grid and panel text */
+  --text-ui--line-height: 1.25rem;
+  --text-2xs: 0.6875rem;           /* 11px — chips, eyebrows */
+  --text-2xs--line-height: 0.875rem;
+
+  /* Layout — the three-pane studio on an 8px grid */
+  --spacing-rail: 3.5rem;
+  --spacing-rail-open: 11rem;
+  --spacing-row: 2.25rem;          /* 36px grid rows */
+  --spacing-topbar: 3rem;
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+
+  --ease-out-soft: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply font-sans;
+    color-scheme: light;
+  }
+  html.dark {
+    color-scheme: dark;
+  }
+  body {
+    @apply bg-background text-foreground text-sm antialiased;
+  }
+  h1, h2, h3 {
+    @apply font-heading tracking-tight;
+  }
+  ::selection {
+    background: color-mix(in oklch, var(--brand-blue) 18%, transparent);
+  }
+}
+
+@layer utilities {
+  /* Tabular numerals on every count, ref number and confidence, so digits align down a column. */
+  .num {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+  }
+  /* The brand gradient — mark and drafting progress only. */
+  .brand-gradient {
+    background-image: var(--brand-gradient);
+  }
+  /* A teal hairline marks a block as engine-authored. */
+  .engine-hairline {
+    box-shadow: inset 3px 0 0 0 var(--brand-teal);
+  }
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--line-strong) transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

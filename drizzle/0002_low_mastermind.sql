@@ -1,0 +1,1 @@
+ALTER TABLE "rfp_questions" ADD COLUMN "existing_answer" jsonb;
