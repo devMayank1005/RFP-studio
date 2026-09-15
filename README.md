@@ -46,13 +46,34 @@ path, not the site root. Keep `http://localhost:3001/api/auth/callback/microsoft
 
 ## Deploying
 
-1. Create a fresh Entra app registration for production; set the six auth variables plus
-   `ANTHROPIC_API_KEY` and `VOYAGE_API_KEY` in Vercel (Production scope). Neon and Blob variables
-   are already injected by the integrations.
-2. Create an Inngest app (inngest.com), put its Event Key and Signing Key in Vercel, redeploy.
-3. Sync the functions: `curl -X PUT https://<host>/api/inngest` → `{"message":"Successfully registered"}`.
+The build needs no secrets. Neon and Blob variables come from the integrations; the auth instance
+is constructed on first use rather than at import, and the Claude and Voyage keys are read without
+throwing — `next build` evaluates every route module while collecting page data, and the first
+Vercel build died on the allowlist check for exactly that reason. A deployment without the SSO variables therefore builds
+and serves the sign-in page; the Microsoft button answers 500, with the missing variable named in
+the function log, until step 1 is done.
+
+1. Create a fresh Entra app registration for production (redirect URI above — never reuse the
+   development registration), then set the variables in Vercel. Production scope; add Preview too
+   if preview deployments should sign in.
+
+   ```bash
+   for v in BETTER_AUTH_SECRET BETTER_AUTH_URL MICROSOFT_CLIENT_ID MICROSOFT_CLIENT_SECRET \
+            MICROSOFT_TENANT_ID ALLOWED_EMAIL_DOMAINS ANTHROPIC_API_KEY VOYAGE_API_KEY; do
+     vercel env add "$v" production
+   done
+   ```
+
+   `BETTER_AUTH_SECRET` is `openssl rand -base64 32`; `BETTER_AUTH_URL` is the production origin
+   with no trailing slash; `MICROSOFT_TENANT_ID` is the Kognoz tenant GUID.
+2. Create an Inngest app (inngest.com), add `INNGEST_EVENT_KEY` and `INNGEST_SIGNING_KEY` the same
+   way. Without them a production build sends nothing: uploads sit at "queued" forever.
+3. Run `pnpm db:migrate` against the production `DATABASE_URL_UNPOOLED`, then `db:seed` and `kb:seed`
+   (the KB seed needs `VOYAGE_API_KEY` in the shell to embed).
+4. Deploy: `vercel deploy --prod`. A plain `vercel deploy --target=preview` makes a preview first;
+   `vercel inspect <url>` shows the target either way.
+5. Sync the functions: `curl -X PUT https://<host>/api/inngest` → `{"message":"Successfully registered"}`.
    Success also proves the signing key is right.
-4. Run `pnpm db:migrate` against the production `DATABASE_URL_UNPOOLED`, then `db:seed` and `kb:seed`.
 
 Functions are pinned to `bom1` (Mumbai) in `vercel.json`; the database is in Singapore (`sin1`),
 the closest Neon marketplace region.

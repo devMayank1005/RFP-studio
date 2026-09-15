@@ -13,7 +13,7 @@ import { retryOnConnectionError } from "@/db/retry";
 import { auditLog, member, organization } from "@/db/schema";
 import { isAllowedEmailDomain, parseAllowedDomains } from "@/domain/access";
 import type { Role } from "@/domain/enums";
-import { auth } from "@/lib/auth";
+import { getAuth } from "@/lib/auth";
 import { readEnv } from "@/lib/env";
 
 /** Role granted on first sign-in to someone from an allowed domain. */
@@ -63,7 +63,7 @@ type SessionResult =
  */
 const resolveSession = cache(async function resolveSession(): Promise<SessionResult> {
   const requestHeaders = await headers();
-  const session = await retryOnConnectionError(() => auth.api.getSession({ headers: requestHeaders }));
+  const session = await retryOnConnectionError(() => getAuth().api.getSession({ headers: requestHeaders }));
 
   if (!session?.user) {
     /**

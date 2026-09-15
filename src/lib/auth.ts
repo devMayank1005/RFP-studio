@@ -27,14 +27,24 @@ import { redactSecrets } from "@/lib/redact";
  *   2. ALLOWED_EMAIL_DOMAINS additionally excludes tenant GUESTS, who keep
  *      their own address and would otherwise see every client's RFP.
  * Membership itself is granted just-in-time in src/lib/session.ts.
+ *
+ * BUILT ON FIRST USE, not at import. `next build` evaluates every route module
+ * while "collecting page data", with whatever env the build happens to have,
+ * and the first Vercel build died right there on the allowlist check. A
+ * deployment without the SSO variables must still build; what it must not do
+ * is serve a sign-in. So every check below runs — and throws with the same
+ * message — on the first request that needs auth instead of at import.
  */
-const allowedDomains = parseAllowedDomains(readEnv("ALLOWED_EMAIL_DOMAINS"));
+type Auth = ReturnType<typeof createAuth>;
 
-if (allowedDomains.length === 0) {
-  throw new Error(
-    "ALLOWED_EMAIL_DOMAINS is not set. Refusing to start with an empty allowlist — " +
-      "set it to e.g. kognozconsulting.com.",
-  );
+export type Session = Auth["$Infer"]["Session"];
+
+let instance: Auth | undefined;
+
+/** The Better Auth instance, constructed once per process on first use. */
+export function getAuth(): Auth {
+  instance ??= createAuth();
+  return instance;
 }
 
 /**
@@ -47,93 +57,103 @@ if (allowedDomains.length === 0) {
 const TENANT_ALIASES = new Set(["common", "organizations", "consumers"]);
 const TENANT_GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const tenantId = readEnv("MICROSOFT_TENANT_ID") ?? "common";
-
-if (!TENANT_GUID.test(tenantId) && !TENANT_ALIASES.has(tenantId.toLowerCase())) {
-  throw new Error(
-    "MICROSOFT_TENANT_ID must be a tenant GUID or one of common/organizations/consumers. " +
-      "It goes into Microsoft's endpoint URLs, so a malformed value fails as an unexplained " +
-      "sign-in loop rather than as an error.",
-  );
-}
-
 const SSO_HINT = "Microsoft SSO is the only sign-in path.";
-const clientId = requireEnv("MICROSOFT_CLIENT_ID", SSO_HINT);
-// readSecret, not requireEnv: the secret goes into the token request, and a
-// multi-line paste would fail as AADSTS7000215 with nothing pointing at why.
-const clientSecret = readSecret("MICROSOFT_CLIENT_SECRET");
-if (!clientSecret) throw new Error(`MICROSOFT_CLIENT_SECRET is not set. ${SSO_HINT}`);
 
-export const auth = betterAuth({
-  database: drizzleAdapter(db, { provider: "pg", schema }),
-  baseURL: readEnv("BETTER_AUTH_URL"),
+function createAuth() {
+  const allowedDomains = parseAllowedDomains(readEnv("ALLOWED_EMAIL_DOMAINS"));
 
-  socialProviders: {
-    microsoft: {
-      clientId,
-      clientSecret,
-      // "common" accepts any Entra tenant. MICROSOFT_TENANT_ID locks sign-in
-      // to the Kognoz tenant.
-      tenantId,
+  if (allowedDomains.length === 0) {
+    throw new Error(
+      "ALLOWED_EMAIL_DOMAINS is not set. Refusing to start with an empty allowlist — " +
+        "set it to e.g. kognozconsulting.com.",
+    );
+  }
+
+  const tenantId = readEnv("MICROSOFT_TENANT_ID") ?? "common";
+
+  if (!TENANT_GUID.test(tenantId) && !TENANT_ALIASES.has(tenantId.toLowerCase())) {
+    throw new Error(
+      "MICROSOFT_TENANT_ID must be a tenant GUID or one of common/organizations/consumers. " +
+        "It goes into Microsoft's endpoint URLs, so a malformed value fails as an unexplained " +
+        "sign-in loop rather than as an error.",
+    );
+  }
+
+  const clientId = requireEnv("MICROSOFT_CLIENT_ID", SSO_HINT);
+  // readSecret, not requireEnv: the secret goes into the token request, and a
+  // multi-line paste would fail as AADSTS7000215 with nothing pointing at why.
+  const clientSecret = readSecret("MICROSOFT_CLIENT_SECRET");
+  if (!clientSecret) throw new Error(`MICROSOFT_CLIENT_SECRET is not set. ${SSO_HINT}`);
+
+  return betterAuth({
+    database: drizzleAdapter(db, { provider: "pg", schema }),
+    baseURL: readEnv("BETTER_AUTH_URL"),
+
+    socialProviders: {
+      microsoft: {
+        clientId,
+        clientSecret,
+        // "common" accepts any Entra tenant. MICROSOFT_TENANT_ID locks sign-in
+        // to the Kognoz tenant.
+        tenantId,
+      },
     },
-  },
 
-  user: {
-    /**
-     * Refuse a disallowed address at the auth layer, before any row is
-     * written. Bouncing later would leave orphaned user records behind for
-     * every guest who ever tried.
-     */
-    validateUserInfo: ({ user }) => {
-      if (isAllowedEmailDomain(user.email, allowedDomains)) return;
-      return {
-        error: "domain_not_allowed",
-        errorDescription: `RFP Studio is limited to ${allowedDomains.join(", ")} accounts.`,
-      };
+    user: {
+      /**
+       * Refuse a disallowed address at the auth layer, before any row is
+       * written. Bouncing later would leave orphaned user records behind for
+       * every guest who ever tried.
+       */
+      validateUserInfo: ({ user }) => {
+        if (isAllowedEmailDomain(user.email, allowedDomains)) return;
+        return {
+          error: "domain_not_allowed",
+          errorDescription: `RFP Studio is limited to ${allowedDomains.join(", ")} accounts.`,
+        };
+      },
     },
-  },
 
-  onAPIError: {
-    /**
-     * Record why a sign-in failed. Without this the browser shows only
-     * "internal_server_error" and the cause is invisible unless someone is
-     * watching the server log at the moment it happens.
-     */
-    onError: async (error, ctx) => {
-      const e = error as {
-        message?: string;
-        body?: { code?: string; message?: string };
-        status?: number;
-        path?: string;
-      };
-      const path = e?.path ?? (ctx as unknown as { path?: string })?.path ?? null;
-      try {
-        await db.insert(authErrors).values({
-          path,
-          code: e?.body?.code ?? (e?.status ? String(e.status) : null),
-          message: redactSecrets(e?.body?.message ?? e?.message ?? String(error)),
-        });
-      } catch {
-        // Diagnostics must never take down the request they are describing.
-      }
-      console.error("[auth]", path, e?.body?.code ?? e?.status, e?.body?.message ?? e?.message);
+    onAPIError: {
+      /**
+       * Record why a sign-in failed. Without this the browser shows only
+       * "internal_server_error" and the cause is invisible unless someone is
+       * watching the server log at the moment it happens.
+       */
+      onError: async (error, ctx) => {
+        const e = error as {
+          message?: string;
+          body?: { code?: string; message?: string };
+          status?: number;
+          path?: string;
+        };
+        const path = e?.path ?? (ctx as unknown as { path?: string })?.path ?? null;
+        try {
+          await db.insert(authErrors).values({
+            path,
+            code: e?.body?.code ?? (e?.status ? String(e.status) : null),
+            message: redactSecrets(e?.body?.message ?? e?.message ?? String(error)),
+          });
+        } catch {
+          // Diagnostics must never take down the request they are describing.
+        }
+        console.error("[auth]", path, e?.body?.code ?? e?.status, e?.body?.message ?? e?.message);
+      },
     },
-  },
 
-  plugins: [
-    organization({
-      // One workspace (Kognoz), seeded. Nobody creates workspaces from the UI.
-      allowUserToCreateOrganization: false,
-    }),
-  ],
+    plugins: [
+      organization({
+        // One workspace (Kognoz), seeded. Nobody creates workspaces from the UI.
+        allowUserToCreateOrganization: false,
+      }),
+    ],
 
-  session: {
-    expiresIn: 60 * 60 * 24 * 7,
-    updateAge: 60 * 60 * 24,
-    // With SSO-only sign-in, disabling someone in Entra is the only
-    // offboarding lever there is; a hard 7-day cap bounds that window.
-    disableSessionRefresh: true,
-  },
-});
-
-export type Session = typeof auth.$Infer.Session;
+    session: {
+      expiresIn: 60 * 60 * 24 * 7,
+      updateAge: 60 * 60 * 24,
+      // With SSO-only sign-in, disabling someone in Entra is the only
+      // offboarding lever there is; a hard 7-day cap bounds that window.
+      disableSessionRefresh: true,
+    },
+  });
+}

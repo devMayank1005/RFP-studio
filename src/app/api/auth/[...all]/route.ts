@@ -2,7 +2,7 @@ import { toNextJsHandler } from "better-auth/next-js";
 
 import { db } from "@/db/client";
 import { authErrors } from "@/db/schema";
-import { auth } from "@/lib/auth";
+import { getAuth } from "@/lib/auth";
 import { redactSecrets } from "@/lib/redact";
 
 /**
@@ -17,7 +17,13 @@ import { redactSecrets } from "@/lib/redact";
  * the error URL is logged with its code before being passed through. Records the
  * code and path only — never a token, never an address (§8).
  */
-const handlers = toNextJsHandler(auth);
+let handlers: ReturnType<typeof toNextJsHandler> | undefined;
+
+/** Built on the first request: `getAuth()` reads the SSO env, which a build need not have. */
+function nextHandlers() {
+  handlers ??= toNextJsHandler(getAuth());
+  return handlers;
+}
 
 /** Entra's token endpoint: `https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token`. */
 const ENTRA_TOKEN_ENDPOINT =
@@ -188,13 +194,13 @@ async function record(request: Request, response: Response) {
 }
 
 export async function GET(request: Request) {
-  const response = await handlers.GET(request);
+  const response = await nextHandlers().GET(request);
   await record(request, response);
   return response;
 }
 
 export async function POST(request: Request) {
-  const response = await handlers.POST(request);
+  const response = await nextHandlers().POST(request);
   await record(request, response);
   return response;
 }
