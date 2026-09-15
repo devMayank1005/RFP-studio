@@ -27,6 +27,12 @@ test.describe("RFP Studio smoke", () => {
     await signIn(page);
   });
 
+  // The "new RFP" case writes a real row; take it back out so the shared dev
+  // database does not grow one draft per run.
+  test.afterAll(() => {
+    execFileSync("node", ["scripts/e2e-cleanup.mjs"], { stdio: "inherit" });
+  });
+
   test("dashboard lists the pipeline with the demo RFP", async ({ page }) => {
     await page.goto("/dashboard");
     await expect(page.getByRole("heading", { name: "RFP pipeline" })).toBeVisible();
