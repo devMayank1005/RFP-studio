@@ -23,7 +23,7 @@
     "inngest:dev": "npx inngest-cli@latest dev -u http://localhost:3000/api/inngest"
   },
   "engines": {
-    "node": ">=20.9.0 <21.0.0"
+    "node": ">=20.9.0"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",
@@ -83,5 +83,5 @@
     "typescript": "^5",
     "vitest": "^4.1.11"
   },
-  "packageManager": "pnpm@11.21.0"
+  "packageManager": "pnpm@9.15.9"
 }
