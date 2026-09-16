@@ -29,9 +29,12 @@ export function DocumentList({ rfpId, documents, locked, now }: { rfpId: string;
   const [isPending, startTransition] = useTransition();
   const [deleting, setDeleting] = useState<string | null>(null);
   const [retrying, setRetrying] = useState<string | null>(null);
+  // Documents retried in this session count as freshly queued, so the list keeps polling until they parse.
+  const [retriedAt, setRetriedAt] = useState<Record<string, Date>>({});
 
   // A document pending for more than five minutes was never picked up — stop polling and offer a retry.
-  const stale = (d: DocumentRow) => d.parseStatus === "pending" && isStaleQueuedJob({ status: "pending", createdAt: d.createdAt }, now);
+  const stale = (d: DocumentRow) =>
+    d.parseStatus === "pending" && isStaleQueuedJob({ status: "pending", createdAt: retriedAt[d.id] ?? d.createdAt }, now);
   const anyParsing = documents.some((d) => d.parseStatus === "parsing" || (d.parseStatus === "pending" && !stale(d)));
   useEffect(() => {
     if (!anyParsing) return;
@@ -59,6 +62,7 @@ export function DocumentList({ rfpId, documents, locked, now }: { rfpId: string;
     setRetrying(null);
     if (!result.ok) return void toast.error(result.error);
     toast.success("Parsing again", { description: doc.fileName });
+    setRetriedAt((prev) => ({ ...prev, [doc.id]: new Date() }));
     router.refresh();
   }
 
