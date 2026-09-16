@@ -1,14 +1,18 @@
 import { cva, type VariantProps } from "class-variance-authority";
 
 import {
+  AVAILABILITY_LABEL,
   COMPLIANCE_LABEL,
+  confidenceBand,
+  KB_ENTRY_TYPE_LABEL,
   MODULE_LABEL,
   OWNER_LABEL,
   QUESTION_TYPE_LABEL,
   RESPONSE_STATUS_LABEL,
   RFP_STATUS_LABEL,
-  confidenceBand,
+  type Availability,
   type Compliance,
+  type KbEntryType,
   type Module,
   type Owner,
   type QuestionType,
@@ -161,6 +165,33 @@ export function MandatoryChip({ mandatory, className }: { mandatory: boolean; cl
   return (
     <Chip tone="outline" className={cn("border-dashed", className)}>
       Must have
+    </Chip>
+  );
+}
+
+// ---- Knowledge base ----
+
+/** Same facts, same colours as compliance: standard reads like "fully", roadmap like "partial", not available like "not supported". */
+export const AVAILABILITY_TONE: Record<Availability, ChipTone> = {
+  standard: "green",
+  configurable: "blue",
+  roadmap: "amber",
+  not_available: "red",
+};
+
+export function AvailabilityChip({ availability, className }: { availability: Availability; className?: string }) {
+  return (
+    <Chip tone={AVAILABILITY_TONE[availability]} className={className}>
+      {AVAILABILITY_LABEL[availability]}
+    </Chip>
+  );
+}
+
+/** A category, not a judgement — so no colour. */
+export function KbEntryTypeChip({ entryType, className }: { entryType: KbEntryType; className?: string }) {
+  return (
+    <Chip tone="outline" className={className}>
+      {KB_ENTRY_TYPE_LABEL[entryType]}
     </Chip>
   );
 }

@@ -11,7 +11,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 import { organization } from "./auth";
-import { availabilityEnum, kbEntryTypeEnum, kbSourceKindEnum, moduleEnum } from "./enums";
+import { availabilityEnum, jobStatusEnum, kbEntryTypeEnum, kbSourceKindEnum, moduleEnum } from "./enums";
 import { responses } from "./responses";
 import { EMBEDDING_DIMENSIONS, rfps } from "./rfp";
 
@@ -27,6 +27,12 @@ export const kbSources = pgTable(
     kind: kbSourceKindEnum("kind").notNull(),
     fileUrl: text("file_url"),
     ingestedAt: timestamp("ingested_at", { withTimezone: true }).defaultNow().notNull(),
+    /** Browser ingests run as a job; the CLI writes synchronously and lands on "done". */
+    status: jobStatusEnum("status").notNull().default("done"),
+    error: text("error"),
+    entryCount: integer("entry_count").notNull().default(0),
+    progressDone: integer("progress_done").notNull().default(0),
+    progressTotal: integer("progress_total").notNull().default(0),
   },
   (t) => [index("kb_sources_workspace_idx").on(t.workspaceId)],
 );

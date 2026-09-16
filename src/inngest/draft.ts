@@ -1,11 +1,11 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { NonRetriableError } from "inngest";
 
 import { db } from "@/db/client";
 import { bumpJobProgress, finishJob, markJobRunning, setJobProgress } from "@/db/jobs";
 import { getActiveBrand } from "@/db/queries/brand";
 import { retrieveApprovedAnswers, retrieveEntries } from "@/db/queries/kb";
-import { responseCitations, responseRevisions, responses, rfpQuestions, rfps } from "@/db/schema";
+import { approvedAnswers, responseCitations, responseRevisions, responses, rfpQuestions, rfps } from "@/db/schema";
 import { numberPassages, type Passage } from "@/domain/drafting";
 import { draftResponse } from "@/engine/draft";
 import { embedQuery, questionEmbedText } from "@/engine/embed";
@@ -204,6 +204,15 @@ async function draftOne(input: {
       .update(responses)
       .set({ currentRevisionId: revision.id, status: "ai_draft", compliance: draft.compliance, confidence: draft.confidence.toFixed(3) })
       .where(eq(responses.id, responseId));
+
+    // The flywheel's scoreboard: an approved answer counts as reused when the draft actually cites it, not merely when retrieval offered it.
+    const citedAnswerIds = [...new Set(draft.citations.map((c) => passages.find((x) => x.n === c.n)!).filter((p) => p.kind === "approved_answer").map((p) => p.id))];
+    if (citedAnswerIds.length) {
+      await tx
+        .update(approvedAnswers)
+        .set({ reuseCount: sql`${approvedAnswers.reuseCount} + 1`, lastUsedAt: new Date() })
+        .where(inArray(approvedAnswers.id, citedAnswerIds));
+    }
   });
 
   return { compliance: draft.compliance, confidence: draft.confidence };

@@ -91,3 +91,14 @@ describe("parseAllowedDomains", () => {
   });
 });
 
+
+import { can } from "./access";
+import { ROLES } from "./enums";
+
+describe("can — CHRO curation", () => {
+  it("lets every role keep, drop, edit and reorder discovery questions, while generation stays with rfp.edit", () => {
+    for (const role of ROLES) expect(can(role, "chro.curate"), role).toBe(true);
+    expect(can("reviewer", "rfp.edit")).toBe(false);
+    expect(can("consultant", "rfp.edit")).toBe(true);
+  });
+});

@@ -19,14 +19,14 @@ export interface HotkeyHandlers {
   open: () => void;
 }
 
-function isTyping(target: EventTarget | null): boolean {
+export function isTyping(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null;
   if (!el) return false;
   const tag = el.tagName;
   return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable || !!el.closest('[contenteditable="true"]');
 }
 
-function dialogOpen(): boolean {
+export function dialogOpen(): boolean {
   return !!document.querySelector('[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"], [role="menu"][data-state="open"]');
 }
 

@@ -31,7 +31,7 @@ export interface IngestEntry {
 }
 
 /** Anything shorter is a heading or a pointer, not a passage an answer can cite. */
-const MIN_BODY_CHARS = 40;
+export const MIN_BODY_CHARS = 40;
 
 function featureKey(name: string): string {
   return name.replace(/\s+/g, " ").trim().toLowerCase();

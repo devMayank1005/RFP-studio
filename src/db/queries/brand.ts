@@ -20,7 +20,13 @@ export async function getActiveBrand(workspaceId: string) {
     accentColor: row?.accentColor ?? "#2B9E85",
     successColor: row?.successColor ?? "#71A247",
     logoUrl: row?.logoUrl ?? "/brand/kognoz-logo.png",
+    fontFamily: row?.fontFamily ?? "Inter",
     footerText: row?.footerText ?? null,
+    docxTemplateUrl: row?.docxTemplateUrl ?? null,
+    pptxTemplateUrl: row?.pptxTemplateUrl ?? null,
     voiceGuide: row?.voiceGuide?.trim() || DEFAULT_VOICE_GUIDE,
+    /** Whether the stored guide differs from the built-in default. */
+    voiceCustomised: !!row?.voiceGuide?.trim() && row.voiceGuide.trim() !== DEFAULT_VOICE_GUIDE.trim(),
+    updatedAt: row?.updatedAt ?? null,
   };
 }

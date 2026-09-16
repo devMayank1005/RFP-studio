@@ -61,6 +61,7 @@ export type Action =
   | "response.flag"
   | "kb.promote"
   | "kb.edit"
+  | "chro.curate"
   | "export.create"
   | "settings.manage"
   | "team.manage";
@@ -68,15 +69,15 @@ export type Action =
 const ROLE_ACTIONS: Record<Role, ReadonlySet<Action>> = {
   admin: new Set<Action>([
     "rfp.create", "rfp.edit", "question.confirm", "response.draft", "response.edit",
-    "response.approve", "response.flag", "kb.promote", "kb.edit", "export.create",
+    "response.approve", "response.flag", "kb.promote", "kb.edit", "chro.curate", "export.create",
     "settings.manage", "team.manage",
   ]),
   consultant: new Set<Action>([
     "rfp.create", "rfp.edit", "question.confirm", "response.draft", "response.edit",
-    "response.approve", "response.flag", "kb.promote", "kb.edit", "export.create",
+    "response.approve", "response.flag", "kb.promote", "kb.edit", "chro.curate", "export.create",
   ]),
-  sales: new Set<Action>(["rfp.create", "rfp.edit", "question.confirm", "response.draft", "response.edit", "response.flag", "export.create"]),
-  reviewer: new Set<Action>(["response.edit", "response.approve", "response.flag", "kb.promote"]),
+  sales: new Set<Action>(["rfp.create", "rfp.edit", "question.confirm", "response.draft", "response.edit", "response.flag", "chro.curate", "export.create"]),
+  reviewer: new Set<Action>(["response.edit", "response.approve", "response.flag", "kb.promote", "chro.curate"]),
 };
 
 export function can(role: Role | string, action: Action): boolean {

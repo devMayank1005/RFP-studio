@@ -1,3 +1,4 @@
+import { BrandStyle } from "@/components/brand/brand-style";
 import { AppShell } from "@/components/shell/app-shell";
 import { requireSession } from "@/lib/session";
 
@@ -9,7 +10,9 @@ import { requireSession } from "@/lib/session";
 export default async function AppLayout({ children }: LayoutProps<"/">) {
   const session = await requireSession();
   return (
-    <AppShell
+    <>
+      <BrandStyle workspaceId={session.workspaceId} />
+      <AppShell
       user={{
         name: session.name,
         email: session.email,
@@ -18,7 +21,8 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         workspaceName: session.workspaceName,
       }}
     >
-      {children}
-    </AppShell>
+        {children}
+      </AppShell>
+    </>
   );
 }
