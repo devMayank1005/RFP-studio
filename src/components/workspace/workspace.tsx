@@ -58,11 +58,13 @@ export function Workspace({ rfpId, initial, role }: { rfpId: string; initial: Wo
   const approve = useApprove(rfpId);
   const prefetch = usePrefetchDetail(rfpId);
 
-  // URL → active row on first load; active row → URL afterwards.
+  // URL → active row: on first load and whenever the URL moves underneath us (⌘K, back/forward); active row → URL afterwards.
   useEffect(() => {
-    if (params.row && !activeId && rows.some((r) => r.questionId === params.row)) setActive(params.row);
+    if (params.row && params.row !== activeId && rows.some((r) => r.questionId === params.row)) setActive(params.row);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [params.row, rows]);
+  // The store outlives the page: never carry this RFP's row into the next one.
+  useEffect(() => () => setActive(null), [setActive]);
   useEffect(() => {
     if ((activeId ?? "") !== params.row) void setParams({ row: activeId ?? "" });
     // eslint-disable-next-line react-hooks/exhaustive-deps

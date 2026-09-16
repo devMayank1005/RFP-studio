@@ -70,8 +70,8 @@ test.describe("RFP Studio smoke", () => {
     await page.getByRole("link", { name: /Apex Manufacturing — HRMS implementation RFP/ }).click();
     await expect(page.getByRole("grid")).toBeVisible();
 
-    // Pick an AI draft via the status facet, activate it, approve with A.
-    await page.getByRole("button", { name: /AI draft/ }).first().click();
+    // Pick an unapproved row via the status facet — AI draft or Edited, whichever the shared demo still has — activate it, approve with A.
+    await page.getByRole("button", { name: /AI draft|Edited/ }).filter({ hasText: /[1-9]/ }).first().click();
     await page.keyboard.press("j");
     // Scope to the panel: the status facet is also a button whose name starts with "Approve…".
     const panel = page.getByRole("tabpanel");

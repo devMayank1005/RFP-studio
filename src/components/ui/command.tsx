@@ -39,19 +39,21 @@ function CommandDialog({
   children,
   className,
   showCloseButton = false,
+  commandProps,
   ...props
 }: React.ComponentProps<typeof Dialog> & {
   title?: string
   description?: string
   className?: string
   showCloseButton?: boolean
+  /** Props for the cmdk root: shouldFilter, vimBindings, loop, filter. */
+  commandProps?: Omit<React.ComponentProps<typeof Command>, "children">
 }) {
+  // The cmdk root must wrap every Command* child: Input, List and Item read
+  // its store from context and throw without it. The sr-only header lives
+  // inside the content so the dialog is labelled while it is open.
   return (
     <Dialog {...props}>
-      <DialogHeader className="sr-only">
-        <DialogTitle>{title}</DialogTitle>
-        <DialogDescription>{description}</DialogDescription>
-      </DialogHeader>
       <DialogContent
         className={cn(
           "top-1/3 translate-y-0 overflow-hidden rounded-xl! p-0",
@@ -59,7 +61,13 @@ function CommandDialog({
         )}
         showCloseButton={showCloseButton}
       >
-        {children}
+        <DialogHeader className="sr-only">
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
+        </DialogHeader>
+        <Command label={title} {...commandProps}>
+          {children}
+        </Command>
       </DialogContent>
     </Dialog>
   )
