@@ -85,12 +85,13 @@ the closest Neon marketplace region.
 ```
 src/domain/      pure rules: enums, extraction mapping, drafting prompt assembly, triage order (tested)
 src/lib/parsing/ xlsx / pdf / docx → ParsedDocument
+src/lib/export/  ExcelJS and docx renderers for the Excel (fresh or filled-in) and Word exports
 src/engine/      Claude calls (structured outputs) + Voyage embeddings
 prompts/         versioned system prompts and the default voice guide
-src/inngest/     parse-document → extract-questions → draft-responses (durable per-question steps)
+src/inngest/     parse-document → extract-questions → draft-responses (durable per-question steps), build-export
 src/app/actions/ server actions: rfps, documents, questions, responses, review
 src/db/          Drizzle schema, queries, jobs, audit, seed
-src/components/  shell, chips, dashboard, wizard, workspace, kb (knowledge-base screen)
+src/components/  shell, chips, dashboard, wizard, workspace, kb (knowledge-base screen), exports
 ```
 
 Flow: **New RFP** (client) → **Upload** (private Blob, parse job) → **Questions** (extraction job:
@@ -114,6 +115,19 @@ with reuse counts, and sources. Entries are edited in a side sheet (`N` new, `J/
 and re-embedded when their text changes; they are deactivated rather than deleted so past citations still
 resolve. "Ingest a document" uploads a PDF/DOCX to private Blob and runs the `ingest-kb-source` Inngest job,
 whose progress lives on the `kb_sources` row (migration 0003).
+
+**Exports** (`/rfps/[id]/exports`): the files that go to the client. **Excel** either as a fresh workbook —
+the client's own columns in their original order, then Compliance, Response, Status, Owner, Open points and
+Sources — or as the client's uploaded questionnaire *filled in*: every question is matched back to its row
+(by text, so merged and split questions still land; whatever cannot be matched is listed on a final "Kognoz
+notes" sheet) and our answer, compliance and remarks go into their own Solution / Feasibility / Remarks
+columns, appended when they have none. **Word**: cover, an executive summary Claude writes from the approved
+answers, an overview table, every section with its questions, answers, sources and open points, and the kept
+CHRO questions as an appendix — colours, font, logo and footer from the brand template. Every question is
+exported with its current answer; unapproved ones are marked (a Status column, or an amber cell with a note)
+and the page says how many there are before you build; tick "Only approved answers" to leave the rest blank.
+Builds run as the `build-export` Inngest job, land in private Blob and download through a session-gated route;
+the history keeps every file with who built it. The deck is a later milestone.
 
 ## Scripts
 
