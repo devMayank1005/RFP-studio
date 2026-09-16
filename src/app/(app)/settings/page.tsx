@@ -1,20 +1,48 @@
-import { Settings2 } from "lucide-react";
 import type { Metadata } from "next";
 
-import { EmptyState } from "@/components/shell/empty-state";
+import { BrandForm } from "@/components/settings/brand-form";
+import { loadSettingsParams } from "@/components/settings/params";
+import { SettingsTabs } from "@/components/settings/settings-tabs";
+import { TeamTable } from "@/components/settings/team-table";
+import { VoiceForm } from "@/components/settings/voice-form";
 import { PageHeader } from "@/components/shell/page-header";
+import { getActiveBrand } from "@/db/queries/brand";
+import { listMembers } from "@/db/queries/team";
+import { can } from "@/domain/access";
+import { requireSession } from "@/lib/session";
 
 export const metadata: Metadata = { title: "Settings" };
 
-export default function SettingsPage() {
+/** Team and roles, the brand template with a live preview, and the voice guide behind every draft. */
+export default async function SettingsPage({ searchParams }: PageProps<"/settings">) {
+  const [session] = await Promise.all([requireSession(), loadSettingsParams(searchParams)]);
+  const [members, brand] = await Promise.all([listMembers(session.workspaceId), getActiveBrand(session.workspaceId)]);
+  const now = new Date();
+  const canManageTeam = can(session.role, "team.manage");
+  const canManageSettings = can(session.role, "settings.manage");
+
   return (
     <>
-      <PageHeader title="Settings" description="Team and roles, the brand template, and the voice guide behind every draft." />
-      <EmptyState
-        icon={Settings2}
-        milestone="Milestone 2"
-        title="Team, brand and voice settings land next"
-        description="Roles are granted on first sign-in for now (first person in is admin, everyone else a consultant). The Kognoz brand template and voice guide are seeded and already in use."
+      <PageHeader title="Settings" description="Team and roles, the brand template, and the voice guide behind every draft." compact />
+      <SettingsTabs
+        panels={{
+          team: <TeamTable members={members} meId={session.userId} canManage={canManageTeam} now={now} />,
+          brand: (
+            <BrandForm
+              initial={{
+                name: brand.name,
+                primaryColor: brand.primaryColor,
+                accentColor: brand.accentColor,
+                successColor: brand.successColor,
+                logoUrl: brand.logoUrl ?? "",
+                fontFamily: brand.fontFamily,
+                footerText: brand.footerText ?? "",
+              }}
+              canEdit={canManageSettings}
+            />
+          ),
+          voice: <VoiceForm initial={brand.voiceGuide} canEdit={canManageSettings} />,
+        }}
       />
     </>
   );

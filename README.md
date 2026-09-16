@@ -103,6 +103,10 @@ not supported, open points). Reviewers keep, drop, edit and reorder them (`J/K`,
 their own; kept questions survive regeneration. `pnpm exec tsx scripts/chro-preview.ts <rfpId>` prints a set
 without writing, for prompt tuning.
 
+**Settings** (`/settings`): team roles (admins only; the last admin cannot be demoted), the brand template
+with a live preview (colours drive the chrome through `<BrandStyle/>`; chip tints stay fixed for contrast;
+dark mode keeps its own primary), and the voice guide that opens every draft's system prompt.
+
 **Knowledge base** (`/kb`): four tabs — Darwinbox capabilities by module, Kognoz services, approved answers
 with reuse counts, and sources. Entries are edited in a side sheet (`N` new, `J/K` move, `Enter` open, `/` search)
 and re-embedded when their text changes; they are deactivated rather than deleted so past citations still

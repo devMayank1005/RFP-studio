@@ -37,10 +37,13 @@ test.describe("Knowledge base", () => {
     await expect(page.getByRole("heading", { name: "Knowledge base" })).toBeVisible();
     await expect(kbList(page)).toBeVisible();
 
-    // N opens the editor; ⌘/Ctrl+Enter saves.
-    await page.keyboard.press("n");
+    // N opens the editor; ⌘/Ctrl+Enter saves. The key lands only once React has attached the
+    // listener, which can trail the first paint under load — so press until the sheet answers.
     const dialog = page.getByRole("dialog");
-    await expect(dialog).toBeVisible();
+    await expect(async () => {
+      await page.keyboard.press("n");
+      await expect(dialog).toBeVisible({ timeout: 1_000 });
+    }).toPass({ timeout: 20_000 });
     await dialog.getByLabel("Feature or service").fill(ENTRY_NAME);
     await dialog.getByLabel("Passage").fill(ENTRY_BODY);
     await dialog.getByLabel("Tags").fill("smoke, e2e");
