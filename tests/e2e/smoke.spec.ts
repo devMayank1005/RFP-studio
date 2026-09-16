@@ -84,6 +84,24 @@ test.describe("RFP Studio smoke", () => {
     await expect(panel.getByRole("button", { name: /^Approve/ })).toBeVisible();
   });
 
+  test("workspace: add an approved answer to the knowledge base", async ({ page }) => {
+    await page.goto("/dashboard");
+    await page.getByRole("link", { name: /Apex Manufacturing — HRMS implementation RFP/ }).click();
+    await expect(page.getByRole("grid")).toBeVisible();
+
+    // Only approved answers can be promoted: filter to them and take the first.
+    await page.getByRole("button", { name: /^Approved/ }).first().click();
+    await page.keyboard.press("j");
+    const panel = page.getByRole("tabpanel");
+    await panel.getByRole("button", { name: "Add to KB" }).click();
+
+    // Claude generalises the pair and Voyage embeds it — a real round trip.
+    await expect(page.getByText("Added to the knowledge base")).toBeVisible({ timeout: 45_000 });
+    await expect(panel.getByText("In knowledge base")).toBeVisible();
+    // Promoting the same answer twice is refused, so the button must be gone.
+    await expect(panel.getByRole("button", { name: "Add to KB" })).toHaveCount(0);
+  });
+
   test("new RFP form validates and creates a draft", async ({ page }) => {
     await page.goto("/rfps/new");
     await expect(page.getByRole("heading", { name: "New RFP" })).toBeVisible();

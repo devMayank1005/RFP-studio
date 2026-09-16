@@ -147,6 +147,8 @@ export interface QuestionDetail {
     currentRevisionId: string | null;
     flagReason: string | null;
     approvedAt: Date | null;
+    /** Set once "Add to KB" has promoted this response into approved_answers. */
+    kbAnswerId: string | null;
   } | null;
   revisions: RevisionView[];
 }
@@ -182,7 +184,10 @@ export async function getQuestionDetail(workspaceId: string, rfpId: string, ques
     .limit(1);
 
   let revisions: RevisionView[] = [];
+  let kbAnswerId: string | null = null;
   if (response) {
+    const [promoted] = await db.select({ id: approvedAnswers.id }).from(approvedAnswers).where(eq(approvedAnswers.originResponseId, response.id)).limit(1);
+    kbAnswerId = promoted?.id ?? null;
     const revs = await db
       .select({
         id: responseRevisions.id,
@@ -247,7 +252,7 @@ export async function getQuestionDetail(workspaceId: string, rfpId: string, ques
 
   return {
     ...q,
-    response: response ? { ...response, confidence: response.confidence === null ? null : Number(response.confidence) } : null,
+    response: response ? { ...response, confidence: response.confidence === null ? null : Number(response.confidence), kbAnswerId } : null,
     revisions,
   };
 }

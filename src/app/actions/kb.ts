@@ -1,0 +1,85 @@
+"use server";
+
+import { and, eq } from "drizzle-orm";
+import { z } from "zod";
+
+import { writeAudit } from "@/db/audit";
+import { db } from "@/db/client";
+import { approvedAnswers, clients, responseRevisions, responses, rfpQuestions } from "@/db/schema";
+import { engineConfigError } from "@/engine/client";
+import { approvedAnswerEmbedText, embedConfigError, embedDocuments } from "@/engine/embed";
+import { generaliseAnswer } from "@/engine/generalise";
+import { ActionError, requireCan, requireRfp, runAction, type ActionResult } from "@/lib/actions";
+
+/**
+ * "Add to KB": promote an approved answer into `approved_answers` — the
+ * flywheel. The pair is generalised by Claude (client name stripped, checked
+ * again in code), embedded with Voyage, and from then on retrieved as a
+ * passage for every later RFP. One row per response; promoting twice refuses.
+ */
+export async function promoteToKb(rfpId: string, questionId: string): Promise<ActionResult<{ approvedAnswerId: string; canonicalQuestion: string }>> {
+  return runAction(async () => {
+    const session = await requireCan("kb.promote");
+    const rfp = await requireRfp(session, rfpId);
+    const qid = z.string().uuid().parse(questionId);
+    if (engineConfigError) throw new ActionError(engineConfigError);
+    const embedError = embedConfigError();
+    if (embedError) throw new ActionError(embedError);
+
+    const [row] = await db
+      .select({
+        questionText: rfpQuestions.questionText,
+        acceptanceCriteria: rfpQuestions.acceptanceCriteria,
+        moduleHint: rfpQuestions.moduleHint,
+        responseId: responses.id,
+        status: responses.status,
+        finalText: responseRevisions.finalText,
+      })
+      .from(rfpQuestions)
+      .innerJoin(responses, eq(responses.questionId, rfpQuestions.id))
+      .leftJoin(responseRevisions, eq(responseRevisions.id, responses.currentRevisionId))
+      .where(and(eq(rfpQuestions.id, qid), eq(rfpQuestions.rfpId, rfpId)))
+      .limit(1);
+    if (!row) throw new ActionError("No response to add yet.");
+    if (row.status !== "approved") throw new ActionError("Approve the answer first — only approved answers go into the knowledge base.");
+    if (!row.finalText?.trim()) throw new ActionError("The approved answer is empty.");
+
+    const [already] = await db.select({ id: approvedAnswers.id }).from(approvedAnswers).where(eq(approvedAnswers.originResponseId, row.responseId)).limit(1);
+    if (already) throw new ActionError("This answer is already in the knowledge base.");
+
+    const [client] = await db.select({ name: clients.name }).from(clients).where(eq(clients.id, rfp.clientId)).limit(1);
+    const { result, usage, model } = await generaliseAnswer({
+      clientName: client?.name ?? "",
+      questionText: row.questionText,
+      acceptanceCriteria: row.acceptanceCriteria,
+      answerText: row.finalText,
+      moduleHint: row.moduleHint,
+    });
+    const [embedding] = await embedDocuments([approvedAnswerEmbedText({ canonicalQuestion: result.canonical_question, canonicalAnswer: result.canonical_answer })]);
+
+    return db.transaction(async (tx) => {
+      const [inserted] = await tx
+        .insert(approvedAnswers)
+        .values({
+          workspaceId: session.workspaceId,
+          originResponseId: row.responseId,
+          originRfpId: rfp.id,
+          canonicalQuestion: result.canonical_question,
+          canonicalAnswer: result.canonical_answer,
+          module: result.module,
+          tags: result.tags,
+          embedding,
+        })
+        .returning({ id: approvedAnswers.id });
+      await writeAudit(tx, {
+        workspaceId: session.workspaceId,
+        actorId: session.userId,
+        entity: "approved_answer",
+        entityId: inserted.id,
+        action: "kb.promoted",
+        diff: { rfpId: rfp.id, questionId: qid, responseId: row.responseId, model, usage: { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens } },
+      });
+      return { approvedAnswerId: inserted.id, canonicalQuestion: result.canonical_question };
+    });
+  });
+}

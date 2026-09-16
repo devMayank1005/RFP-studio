@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Flag, Pencil, RefreshCw, Sparkles, Undo2, X } from "lucide-react";
+import { BookPlus, Check, Flag, Pencil, RefreshCw, Sparkles, Undo2, X } from "lucide-react";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
@@ -17,7 +17,7 @@ import type { WorkspaceRow } from "@/db/queries/workspace";
 import { can } from "@/domain/access";
 import { timeAgo } from "@/domain/dates";
 import { COMPLIANCE_LABEL, COMPLIANCE_LEVELS, type Compliance, type Role } from "@/domain/enums";
-import { useApprove, useEdit, useFlag, useQuestionDetail, useSetCompliance, useUnapprove, type QuestionDetailJson } from "@/hooks/use-workspace-data";
+import { useApprove, useEdit, useFlag, usePromoteToKb, useQuestionDetail, useSetCompliance, useUnapprove, type QuestionDetailJson } from "@/hooks/use-workspace-data";
 import { cn } from "@/lib/utils";
 import { useWorkspaceStore } from "@/store/workspace";
 
@@ -41,6 +41,7 @@ export function ContextPanel({ rfpId, row, role, onDraftOne, onJobDone }: { rfpI
   const flag = useFlag(rfpId);
   const edit = useEdit(rfpId);
   const compliance = useSetCompliance(rfpId);
+  const promote = usePromoteToKb(rfpId);
 
   if (!row) {
     return (
@@ -59,6 +60,7 @@ export function ContextPanel({ rfpId, row, role, onDraftOne, onJobDone }: { rfpI
   const canApprove = can(role, "response.approve");
   const canEdit = can(role, "response.edit");
   const canDraft = can(role, "response.draft");
+  const canPromote = can(role, "kb.promote");
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -179,6 +181,18 @@ export function ContextPanel({ rfpId, row, role, onDraftOne, onJobDone }: { rfpI
                 onFlag={(reason) => flag.mutate({ questionId: row.questionId, reason })}
                 disabled={!can(role, "response.flag")}
               />
+              {row.status === "approved" &&
+                canPromote &&
+                (detail.data?.response?.kbAnswerId ? (
+                  <Chip tone="green" dot title="This answer is in the knowledge base and will be offered to future drafts">
+                    In knowledge base
+                  </Chip>
+                ) : (
+                  <Button size="sm" variant="outline" onClick={() => promote.mutate(row.questionId)} disabled={promote.isPending} title="Generalise this approved answer and add it to the knowledge base">
+                    <BookPlus />
+                    {promote.isPending ? "Adding…" : "Add to KB"}
+                  </Button>
+                ))}
               {canEdit && (
                 <CellMenu
                   ariaLabel="Compliance"

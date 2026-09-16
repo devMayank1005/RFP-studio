@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { toast } from "sonner";
 
+import { promoteToKb } from "@/app/actions/kb";
 import { approveResponses, editResponse, flagResponse, setCompliance, unapproveResponses } from "@/app/actions/review";
 import type { QuestionDetail, WorkspaceRow, WorkspaceSection } from "@/db/queries/workspace";
 import type { Compliance } from "@/domain/enums";
@@ -170,6 +171,20 @@ export function useSetCompliance(rfpId: string) {
       }
     },
     onError: (_e, _v, previous) => rollback(previous),
+    onSettled: invalidate,
+  });
+}
+
+/** "Add to KB": no row field changes, so no optimistic patch — the detail refetch flips the button to "In knowledge base". */
+export function usePromoteToKb(rfpId: string) {
+  const { invalidate } = useOptimisticRows(rfpId);
+  return useMutation({
+    mutationFn: (questionId: string) => promoteToKb(rfpId, questionId),
+    onSuccess: (result) => {
+      if (!result.ok) toast.error(result.error);
+      else toast.success("Added to the knowledge base", { description: result.data.canonicalQuestion });
+    },
+    onError: () => toast.error("Could not add to the knowledge base."),
     onSettled: invalidate,
   });
 }
