@@ -69,3 +69,91 @@ describe("sanitiseGeneralised", () => {
     expect(scrubbed.canonical_answer).toBe("The go-live plan.");
   });
 });
+
+// ---- Knowledge base screen (Milestone 2) ----
+
+import { KB_ENTRY_TYPES } from "./enums";
+import { approvedAnswerInputSchema, embedFieldsChanged, entryTypesForTab, groupEntriesByModule, kbEntryInputSchema, parseTagInput, tabForEntryType } from "./kb";
+
+describe("entryTypesForTab / tabForEntryType", () => {
+  it("puts Darwinbox capabilities on their own tab and everything Kognoz-authored on services", () => {
+    expect(entryTypesForTab("capabilities")).toEqual(["darwinbox_capability"]);
+    expect(entryTypesForTab("services")).toEqual(["kognoz_service", "case_study", "boilerplate"]);
+  });
+
+  it("round-trips every entry type", () => {
+    for (const type of KB_ENTRY_TYPES) expect(entryTypesForTab(tabForEntryType(type))).toContain(type);
+  });
+});
+
+describe("parseTagInput", () => {
+  it("splits on commas and newlines, trims, lower-cases and de-duplicates", () => {
+    expect(parseTagInput("Payroll, payroll ,x\nMulti-Entity")).toEqual(["payroll", "x", "multi-entity"]);
+  });
+});
+
+describe("kbEntryInputSchema", () => {
+  const valid = {
+    featureName: " Multi-entity payroll ",
+    product: "Darwinbox",
+    entryType: "darwinbox_capability",
+    module: "payroll",
+    availability: "standard",
+    body: "Runs payroll for several legal entities in one cycle, with statutory filings produced per entity and consolidated reporting.",
+    tags: "Payroll, payroll ,statutory",
+  };
+
+  it("accepts a valid entry, trims text, tidies tags and defaults isActive to true", () => {
+    const result = kbEntryInputSchema.safeParse(valid);
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.featureName).toBe("Multi-entity payroll");
+    expect(result.data.tags).toEqual(["payroll", "statutory"]);
+    expect(result.data.isActive).toBe(true);
+  });
+
+  it("accepts tags already as an array", () => {
+    const result = kbEntryInputSchema.safeParse({ ...valid, tags: ["A", "a", "b"] });
+    expect(result.success && result.data.tags).toEqual(["a", "b"]);
+  });
+
+  it("rejects a body too short to cite and an unknown module", () => {
+    expect(kbEntryInputSchema.safeParse({ ...valid, body: "Too short to be a passage." }).success).toBe(false);
+    expect(kbEntryInputSchema.safeParse({ ...valid, module: "hr-stuff" }).success).toBe(false);
+  });
+});
+
+describe("approvedAnswerInputSchema", () => {
+  it("requires a real question and answer", () => {
+    expect(approvedAnswerInputSchema.safeParse({ canonicalQuestion: "Can payroll run for two entities?", canonicalAnswer: "Yes, one cycle covers every entity with per-entity statutory output.", module: "payroll", tags: [] }).success).toBe(true);
+    expect(approvedAnswerInputSchema.safeParse({ canonicalQuestion: "Short?", canonicalAnswer: "Yes.", module: "payroll", tags: [] }).success).toBe(false);
+  });
+});
+
+describe("embedFieldsChanged", () => {
+  const before = { product: "Darwinbox", module: "payroll" as const, featureName: "Multi-entity payroll", body: "Runs payroll for several entities.", tags: ["payroll"] };
+
+  it("ignores edits that do not change the embedded text", () => {
+    expect(embedFieldsChanged(before, { ...before })).toBe(false);
+  });
+
+  it("flags a change to any field the embedding is built from", () => {
+    expect(embedFieldsChanged(before, { ...before, body: "Runs payroll for several entities, monthly." })).toBe(true);
+    expect(embedFieldsChanged(before, { ...before, tags: ["payroll", "statutory"] })).toBe(true);
+    expect(embedFieldsChanged(before, { ...before, module: "core_hr" })).toBe(true);
+  });
+});
+
+describe("groupEntriesByModule", () => {
+  it("groups in the canonical module order and drops empty modules", () => {
+    const groups = groupEntriesByModule([
+      { id: "1", module: "payroll" as const },
+      { id: "2", module: "core_hr" as const },
+      { id: "3", module: "payroll" as const },
+    ]);
+    expect(groups.map((g) => [g.module, g.rows.length])).toEqual([
+      ["core_hr", 1],
+      ["payroll", 2],
+    ]);
+  });
+});

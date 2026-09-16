@@ -14,15 +14,9 @@ import "@/lib/load-env";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { eq, isNull, sql, and } from "drizzle-orm";
-
-import { db } from "@/db/client";
-import { kbEntries, kbSources } from "@/db/schema";
+import { embedPendingForSource, finishKbSource, upsertKbSource, writeIngestedEntries } from "@/db/kb-ingest";
 import { WORKSPACE_ID } from "@/db/seed/data/workspace";
-import { stableId } from "@/db/seed/ids";
 import { KB_ENTRY_TYPES, KB_SOURCE_KINDS, type KbEntryType, type KbSourceKind } from "@/domain/enums";
-import { ingestEntrySlug } from "@/domain/ingest";
-import { embedDocuments, kbEntryEmbedText } from "@/engine/embed";
 import { extractKbEntries } from "@/engine/ingest";
 import { parseDocument } from "@/lib/parsing";
 
@@ -77,51 +71,11 @@ async function main() {
     return;
   }
 
-  const sourceId = stableId("kb_source", ingestEntrySlug(sourceName, ""));
-  await db
-    .insert(kbSources)
-    .values({ id: sourceId, workspaceId: WORKSPACE_ID, name: sourceName, kind })
-    .onConflictDoUpdate({ target: kbSources.id, set: { name: sourceName, kind, ingestedAt: new Date() } });
-
-  const rows = entries.map((e) => ({
-    id: stableId("kb_entry", ingestEntrySlug(sourceName, e.featureName)),
-    workspaceId: WORKSPACE_ID,
-    entryType,
-    product,
-    module: e.module,
-    featureName: e.featureName,
-    body: e.body,
-    availability: e.availability,
-    tags: e.tags,
-    sourceId,
-    isActive: true,
-  }));
-  // Same rule as the seed: a changed body invalidates the embedding so retrieval never cites stale text.
-  await db
-    .insert(kbEntries)
-    .values(rows)
-    .onConflictDoUpdate({
-      target: kbEntries.id,
-      set: {
-        entryType: sql`excluded."entry_type"`,
-        product: sql`excluded."product"`,
-        module: sql`excluded."module"`,
-        featureName: sql`excluded."feature_name"`,
-        body: sql`excluded."body"`,
-        availability: sql`excluded."availability"`,
-        tags: sql`excluded."tags"`,
-        sourceId: sql`excluded."source_id"`,
-        isActive: true,
-        embedding: sql`case when ${kbEntries.body} is distinct from excluded."body" then null else ${kbEntries.embedding} end`,
-      },
-    });
-
-  const pending = await db.select().from(kbEntries).where(and(eq(kbEntries.sourceId, sourceId), isNull(kbEntries.embedding)));
-  if (pending.length) {
-    const vectors = await embedDocuments(pending.map(kbEntryEmbedText));
-    for (const [i, e] of pending.entries()) await db.update(kbEntries).set({ embedding: vectors[i] }).where(eq(kbEntries.id, e.id));
-  }
-  console.log(`\n[ingest] ${rows.length} entries written for "${sourceName}" (${pending.length} embedded now)`);
+  const sourceId = await upsertKbSource({ workspaceId: WORKSPACE_ID, sourceName, kind, status: "running" });
+  const written = await writeIngestedEntries({ workspaceId: WORKSPACE_ID, sourceId, sourceName, product, entryType, entries });
+  const embedded = await embedPendingForSource(sourceId);
+  await finishKbSource(sourceId, "done", { entryCount: written });
+  console.log(`\n[ingest] ${written} entries written for "${sourceName}" (${embedded} embedded now)`);
 }
 
 main()

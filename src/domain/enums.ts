@@ -217,8 +217,21 @@ export const KB_ENTRY_TYPE_LABEL: Record<KbEntryType, string> = {
 export const AVAILABILITIES = ["standard", "configurable", "roadmap", "not_available"] as const;
 export type Availability = (typeof AVAILABILITIES)[number];
 
+export const AVAILABILITY_LABEL: Record<Availability, string> = {
+  standard: "Standard",
+  configurable: "Configurable",
+  roadmap: "Roadmap",
+  not_available: "Not available",
+};
+
 export const KB_SOURCE_KINDS = ["darwinbox_docs", "internal_doc", "rfp_response"] as const;
 export type KbSourceKind = (typeof KB_SOURCE_KINDS)[number];
+
+export const KB_SOURCE_KIND_LABEL: Record<KbSourceKind, string> = {
+  darwinbox_docs: "Darwinbox documentation",
+  internal_doc: "Internal document",
+  rfp_response: "Past RFP response",
+};
 
 export const CHRO_THEMES = [
   "mandate_vision",

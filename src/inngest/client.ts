@@ -1,6 +1,7 @@
 import { Inngest, eventType } from "inngest";
 import { z } from "zod";
 
+import { KB_ENTRY_TYPES } from "@/domain/enums";
 import { readEnv, readSecret } from "@/lib/env";
 
 /**
@@ -22,6 +23,19 @@ export const draftRequested = eventType("rfp/draft.requested", {
     jobId: z.string(),
     questionIds: z.array(z.string()),
     instruction: z.string().optional(),
+    actorId: z.string(),
+  }),
+});
+
+/** A document uploaded from the Knowledge base screen, to be read into entries. */
+export const kbIngestRequested = eventType("kb/ingest.requested", {
+  schema: z.object({
+    sourceId: z.string(),
+    workspaceId: z.string(),
+    sourceName: z.string(),
+    fileUrl: z.string(),
+    product: z.string(),
+    entryType: z.enum(KB_ENTRY_TYPES),
     actorId: z.string(),
   }),
 });

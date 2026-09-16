@@ -24,6 +24,10 @@ export function rfpUploadPath(rfpId: string, fileName: string): string {
   return `rfps/${rfpId}/uploads/${safeName(fileName)}`;
 }
 
+export function kbSourcePath(workspaceId: string, fileName: string): string {
+  return `kb/${workspaceId}/sources/${safeName(fileName)}`;
+}
+
 export function rfpParsedPath(rfpId: string, documentId: string): string {
   return `rfps/${rfpId}/parsed/${documentId}.json`;
 }

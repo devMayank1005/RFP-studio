@@ -8,7 +8,7 @@ import { INGEST_SYS } from "../../prompts/ingest";
 
 import { EXTRACT_MODEL, ZERO_USAGE, addUsage, client, readUsage, type UsageReport } from "./client";
 
-const CHARS_PER_CHUNK = 24_000;
+export const INGEST_CHARS_PER_CHUNK = 24_000;
 
 export interface IngestResult {
   entries: IngestEntry[];
@@ -18,7 +18,7 @@ export interface IngestResult {
 
 /** Reads a document chunk by chunk, telling each call what earlier chunks already captured. */
 export async function extractKbEntries(pages: ParsedPage[], opts: { sourceName: string; onProgress?: (done: number, total: number) => void | Promise<void> }): Promise<IngestResult> {
-  const chunks = chunkPages(pages, CHARS_PER_CHUNK);
+  const chunks = chunkPages(pages, INGEST_CHARS_PER_CHUNK);
   const raw: RawIngestEntry[] = [];
   const known: string[] = [];
   let usage = ZERO_USAGE;
