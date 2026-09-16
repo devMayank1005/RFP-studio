@@ -13,7 +13,7 @@ const TONE: Record<DueUrgency, ChipTone> = {
  * Due-date urgency. `today` is computed once on the server in Asia/Kolkata and
  * passed down, so the same day renders on the server and the client.
  */
-export function DueBadge({ dueDate, today, className, withDate = true }: { dueDate: string | null; today: string; className?: string; withDate?: boolean }) {
+export function DueBadge({ dueDate, today, className, withDate = true, dateClassName }: { dueDate: string | null; today: string; className?: string; withDate?: boolean; dateClassName?: string }) {
   const days = dueDate ? daysBetween(today, dueDate) : null;
   const { text, urgency } = dueLabel(days);
 
@@ -22,7 +22,7 @@ export function DueBadge({ dueDate, today, className, withDate = true }: { dueDa
       <Chip tone={TONE[urgency]} className={cn(urgency === "none" && "text-faint-ink")}>
         {text}
       </Chip>
-      {withDate && dueDate && <span className="text-2xs text-muted-foreground">{formatDate(dueDate)}</span>}
+      {withDate && dueDate && <span className={cn("text-2xs text-muted-foreground", dateClassName)}>{formatDate(dueDate)}</span>}
     </span>
   );
 }

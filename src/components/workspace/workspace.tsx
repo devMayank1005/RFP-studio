@@ -1,14 +1,19 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
+import { ListChecks } from "lucide-react";
+import Link from "next/link";
 import { useQueryStates } from "nuqs";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { draftRfp } from "@/app/actions/responses";
+import { EmptyState } from "@/components/shell/empty-state";
+import { Button } from "@/components/ui/button";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import type { WorkspaceRow } from "@/db/queries/workspace";
 import type { Role } from "@/domain/enums";
+import { setupStepPath } from "@/domain/routes";
 import { confidenceSort, sheetSort, triageSort } from "@/domain/triage";
 import { useApprove, usePrefetchDetail, useWorkspaceRows, workspaceKey, type WorkspaceData } from "@/hooks/use-workspace-data";
 import { useWorkspaceHotkeys, type HotkeyHandlers } from "@/hooks/use-workspace-hotkeys";
@@ -226,6 +231,20 @@ export function Workspace({ rfpId, initial, role }: { rfpId: string; initial: Wo
         <ResizablePanel defaultSize={53} minSize={30} className="relative">
           <WorkspaceGrid
             rows={visibleRows as WorkspaceRow[]}
+            empty={
+              rows.length === 0 ? (
+                <EmptyState
+                  icon={ListChecks}
+                  title="No questions yet"
+                  description="This RFP's question list has not been extracted and confirmed. Finish setup and the review grid fills in here."
+                  action={
+                    <Button asChild>
+                      <Link href={setupStepPath(rfpId, "upload")}>Continue setup</Link>
+                    </Button>
+                  }
+                />
+              ) : undefined
+            }
             activeId={activeId}
             selected={selected}
             clientColumns={visibleColumns}

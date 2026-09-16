@@ -4,6 +4,7 @@ import { and, count, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { clients, responses, rfpQuestions, rfps } from "@/db/schema";
 import type { EngagementType, RfpStatus } from "@/domain/enums";
+import { isUuid } from "@/domain/ids";
 
 /**
  * Every query here is workspace-scoped: `workspaceId` comes from the session
@@ -69,6 +70,7 @@ export interface RfpHeader {
 
 /** One RFP with its progress figures, scoped to the workspace. Null when it is not ours. */
 export async function getRfpHeader(workspaceId: string, rfpId: string): Promise<RfpHeader | null> {
+  if (!isUuid(rfpId)) return null;
   const [row] = await db
     .select({
       id: rfps.id,

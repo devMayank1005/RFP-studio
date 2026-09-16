@@ -1,7 +1,7 @@
 "use client";
 
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { useEffect, useImperativeHandle, useRef, type Ref } from "react";
+import { useEffect, useImperativeHandle, useRef, type ReactNode, type Ref } from "react";
 
 import { ComplianceChip, ConfidenceChip, MandatoryChip, OwnerChip, QuestionTypeChip, ResponseStatusChip } from "@/components/chips/chips";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -29,6 +29,7 @@ export function WorkspaceGrid({
   onOpen,
   onHover,
   handleRef,
+  empty,
 }: {
   rows: WorkspaceRow[];
   activeId: string | null;
@@ -40,6 +41,8 @@ export function WorkspaceGrid({
   onOpen: (id: string) => void;
   onHover?: (id: string) => void;
   handleRef?: Ref<GridHandle>;
+  /** Shown instead of the filter message when the RFP has no questions at all. */
+  empty?: ReactNode;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const rowHeight = density === "compact" ? 40 : 60;
@@ -97,7 +100,7 @@ export function WorkspaceGrid({
       </div>
 
       {rows.length === 0 ? (
-        <p className="px-6 py-12 text-center text-ui text-muted-foreground">No rows match these filters.</p>
+        (empty ?? <p className="px-6 py-12 text-center text-ui text-muted-foreground">No rows match these filters.</p>)
       ) : (
         <div className="relative" style={{ height: virtualizer.getTotalSize(), minWidth }}>
           {virtualizer.getVirtualItems().map((item) => {

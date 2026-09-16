@@ -3,6 +3,7 @@ import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db/client";
 import { approvedAnswers, kbEntries, responseCitations, responseRevisions, responses, rfpQuestions, rfpSections, rfps, user } from "@/db/schema";
 import type { CitationSource, Compliance, Generator, Module, Owner, QuestionType, ResponseStatus } from "@/domain/enums";
+import { isUuid } from "@/domain/ids";
 
 /**
  * One row of the review grid: the question, its section, and the current
@@ -40,6 +41,7 @@ export interface WorkspaceSection {
 }
 
 export async function getWorkspaceRows(workspaceId: string, rfpId: string): Promise<{ rows: WorkspaceRow[]; sections: WorkspaceSection[] } | null> {
+  if (!isUuid(rfpId)) return null;
   const [owned] = await db.select({ id: rfps.id }).from(rfps).where(and(eq(rfps.id, rfpId), eq(rfps.workspaceId, workspaceId))).limit(1);
   if (!owned) return null;
 
@@ -155,6 +157,7 @@ export interface QuestionDetail {
 
 /** Everything the context panel shows for one question: response, every revision, every citation. */
 export async function getQuestionDetail(workspaceId: string, rfpId: string, questionId: string): Promise<QuestionDetail | null> {
+  if (!isUuid(rfpId) || !isUuid(questionId)) return null;
   const [q] = await db
     .select({
       questionId: rfpQuestions.id,

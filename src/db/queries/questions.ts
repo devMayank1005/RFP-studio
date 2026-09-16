@@ -2,6 +2,7 @@
 import { and, asc, eq } from "drizzle-orm";
 
 import { db } from "@/db/client";
+import { isUuid } from "@/domain/ids";
 import { rfpQuestions, rfpSections, rfps } from "@/db/schema";
 import type { Module, Owner, QuestionType } from "@/domain/enums";
 
@@ -31,6 +32,7 @@ export interface SectionRow {
 
 /** Everything the extraction-review table needs, in sheet order. Workspace-scoped through the RFP. */
 export async function listQuestionsForSetup(workspaceId: string, rfpId: string) {
+  if (!isUuid(rfpId)) return null;
   const [owned] = await db
     .select({ id: rfps.id })
     .from(rfps)

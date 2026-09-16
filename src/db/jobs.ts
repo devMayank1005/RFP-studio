@@ -2,6 +2,7 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 
 import { db } from "@/db/client";
+import { isUuid } from "@/domain/ids";
 import { generationJobs, rfps } from "@/db/schema";
 import type { JobStatus, JobType } from "@/domain/enums";
 
@@ -74,6 +75,7 @@ export interface JobView {
 
 /** A job, only if its RFP belongs to the workspace. */
 export async function getJob(workspaceId: string, jobId: string): Promise<JobView | null> {
+  if (!isUuid(jobId)) return null;
   const [row] = await db
     .select({
       id: generationJobs.id,
@@ -97,6 +99,7 @@ export async function getJob(workspaceId: string, jobId: string): Promise<JobVie
 
 /** The most recent job of a type for an RFP — what the setup screens show. */
 export async function latestJob(rfpId: string, jobType: JobType): Promise<JobView | null> {
+  if (!isUuid(rfpId)) return null;
   const [row] = await db
     .select({
       id: generationJobs.id,

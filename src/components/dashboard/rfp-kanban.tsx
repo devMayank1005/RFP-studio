@@ -3,6 +3,7 @@ import Link from "next/link";
 import { RfpStatusChip } from "@/components/chips/chips";
 import type { RfpListRow } from "@/db/queries/rfps";
 import type { RfpStatus } from "@/domain/enums";
+import { rfpLandingPath } from "@/domain/routes";
 import { cn } from "@/lib/utils";
 
 import { ApprovalMeter } from "./approval-meter";
@@ -38,7 +39,7 @@ export function RfpKanban({ rows, today }: { rows: RfpListRow[]; today: string }
               {cards.map((r) => (
                 <Link
                   key={r.id}
-                  href={`/rfps/${r.id}/workspace`}
+                  href={rfpLandingPath(r.id, r.status)}
                   className="group rounded-md border bg-card p-3 shadow-[0_1px_2px_rgba(35,38,40,0.04)] outline-none transition-colors hover:border-line-strong focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <div className="mb-1.5 flex items-start justify-between gap-2">

@@ -4,6 +4,7 @@ import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { rfpDocuments, rfps } from "@/db/schema";
 import type { DocumentKind, ParseStatus } from "@/domain/enums";
+import { isUuid } from "@/domain/ids";
 
 export interface DocumentRow {
   id: string;
@@ -36,6 +37,7 @@ const columns = {
 };
 
 export async function listDocuments(workspaceId: string, rfpId: string): Promise<DocumentRow[]> {
+  if (!isUuid(rfpId)) return [];
   return db
     .select(columns)
     .from(rfpDocuments)
