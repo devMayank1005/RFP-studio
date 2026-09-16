@@ -17,7 +17,7 @@ export async function searchWorkspace(workspaceId: string, q: string, limits: { 
 
   const [rfpRows, questionRows] = await Promise.all([
     db
-      .select({ id: rfps.id, title: rfps.title, status: rfps.status, clientName: clients.name })
+      .select({ id: rfps.id, title: rfps.title, status: rfps.status, rfpKind: rfps.kind, clientName: clients.name })
       .from(rfps)
       .innerJoin(clients, eq(rfps.clientId, clients.id))
       .where(and(eq(rfps.workspaceId, workspaceId), or(ilike(rfps.title, pattern), ilike(clients.name, pattern))))

@@ -15,8 +15,8 @@ export function RfpHeader({ rfp, today }: { rfp: RfpHeaderData; today: string })
       <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
         <div className="min-w-0">
           <div className="mb-1 flex items-center gap-2 text-2xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
-            <Link href="/dashboard" className="hover:text-foreground">
-              RFPs
+            <Link href={rfp.kind === "quick" ? "/quick" : "/dashboard"} className="hover:text-foreground">
+              {rfp.kind === "quick" ? "Quick Q&A" : "RFPs"}
             </Link>
             <span aria-hidden>/</span>
             <span className="normal-case tracking-normal">{rfp.clientName}</span>
@@ -24,8 +24,12 @@ export function RfpHeader({ rfp, today }: { rfp: RfpHeaderData; today: string })
           <h1 className="truncate font-heading text-xl font-semibold">{rfp.title}</h1>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <RfpStatusChip status={rfp.status} />
-            <DueBadge dueDate={rfp.dueDate} today={today} />
-            <span className="text-2xs text-muted-foreground">{ENGAGEMENT_TYPE_LABEL[rfp.engagementType]}</span>
+            {rfp.kind === "quick" ? null : (
+              <>
+                <DueBadge dueDate={rfp.dueDate} today={today} />
+                <span className="text-2xs text-muted-foreground">{ENGAGEMENT_TYPE_LABEL[rfp.engagementType]}</span>
+              </>
+            )}
           </div>
         </div>
         <div className="w-64 shrink-0 pt-1">
@@ -39,7 +43,7 @@ export function RfpHeader({ rfp, today }: { rfp: RfpHeaderData; today: string })
         </div>
       </div>
       <div className="mt-3">
-        <RfpTabs rfpId={rfp.id} />
+        <RfpTabs rfpId={rfp.id} kind={rfp.kind} />
       </div>
     </div>
   );

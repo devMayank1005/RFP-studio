@@ -9,5 +9,5 @@ export default async function RfpIndexPage({ params }: PageProps<"/rfps/[rfpId]"
   const [session, { rfpId }] = await Promise.all([requireSession(), params]);
   const rfp = await getRfpHeader(session.workspaceId, rfpId);
   if (!rfp) notFound();
-  redirect(rfpLandingPath(rfp.id, rfp.status));
+  redirect(rfpLandingPath(rfp.id, rfp.status, rfp.kind));
 }

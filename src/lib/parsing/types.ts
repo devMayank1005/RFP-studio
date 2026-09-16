@@ -3,7 +3,8 @@
  * happens here; the engine only ever sees this, never a raw file.
  */
 
-export type ParsedKind = "xlsx" | "pdf" | "docx";
+/** "text" is a Quick Q&A paste wrapped as pages; parseDocument never produces it. */
+export type ParsedKind = "xlsx" | "pdf" | "docx" | "text";
 
 export interface ParsedRow {
   /** 1-based row number in the original sheet — it is what the reviewer sees in Excel. */

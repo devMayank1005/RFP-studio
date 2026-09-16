@@ -1,4 +1,4 @@
-import { BookOpen, LayoutDashboard, Settings2, type LucideIcon } from "lucide-react";
+import { BookOpen, LayoutDashboard, Settings2, Zap, type LucideIcon } from "lucide-react";
 
 export interface NavItem {
   title: string;
@@ -12,6 +12,7 @@ export interface NavItem {
 /** The whole information architecture, in one place. The sidebar and ⌘K both read it. */
 export const NAV: NavItem[] = [
   { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard, match: ["/dashboard", "/rfps"], shortcut: "G D" },
+  { title: "Quick Q&A", href: "/quick", icon: Zap, match: ["/quick"], shortcut: "G Q" },
   { title: "Knowledge base", href: "/kb", icon: BookOpen, match: ["/kb"], shortcut: "G K" },
   { title: "Settings", href: "/settings", icon: Settings2, match: ["/settings"], shortcut: "G S" },
 ];

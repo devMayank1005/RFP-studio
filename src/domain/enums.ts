@@ -255,7 +255,17 @@ export const CHRO_THEME_LABEL: Record<ChroTheme, string> = {
 export const CHRO_STATUSES = ["suggested", "kept", "dropped"] as const;
 export type ChroStatus = (typeof CHRO_STATUSES)[number];
 
-export const JOB_TYPES = ["parse", "extract", "draft", "chro", "export"] as const;
+/** A full wizard RFP, or a Quick Q&A session: pasted or uploaded questions drafted straight away. */
+export const RFP_KINDS = ["full", "quick"] as const;
+export type RfpKind = (typeof RFP_KINDS)[number];
+
+export const RFP_KIND_LABEL: Record<RfpKind, string> = {
+  full: "RFP",
+  quick: "Quick Q&A",
+};
+
+// "quick" is appended last so the migration is a plain ADD VALUE.
+export const JOB_TYPES = ["parse", "extract", "draft", "chro", "export", "quick"] as const;
 export type JobType = (typeof JOB_TYPES)[number];
 
 export const JOB_STATUSES = ["queued", "running", "done", "failed", "cancelled"] as const;

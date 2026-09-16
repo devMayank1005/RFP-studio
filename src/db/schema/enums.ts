@@ -20,6 +20,7 @@ import {
   PARSE_STATUSES,
   QUESTION_TYPES,
   RESPONSE_STATUSES,
+  RFP_KINDS,
   RFP_STATUSES,
 } from "@/domain/enums";
 
@@ -29,6 +30,7 @@ import {
  * spelling. Adding a value is a migration (`ALTER TYPE … ADD VALUE`).
  */
 export const rfpStatusEnum = pgEnum("rfp_status", RFP_STATUSES);
+export const rfpKindEnum = pgEnum("rfp_kind", RFP_KINDS);
 export const engagementTypeEnum = pgEnum("engagement_type", ENGAGEMENT_TYPES);
 export const bidderEnum = pgEnum("bidder", BIDDERS);
 export const documentKindEnum = pgEnum("document_kind", DOCUMENT_KINDS);

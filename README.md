@@ -116,6 +116,14 @@ and re-embedded when their text changes; they are deactivated rather than delete
 resolve. "Ingest a document" uploads a PDF/DOCX to private Blob and runs the `ingest-kb-source` Inngest job,
 whose progress lives on the `kb_sources` row (migration 0003).
 
+**Quick Q&A** (`/quick`): the short path. Paste questions (or drop a client's questionnaire), add deal context,
+pick a client or none, and press **Draft responses**. A `quick-intake` job turns the paste or file into questions
+(the same extractor as the wizard, with a line-split fallback for bare lists), then hands off to the ordinary draft
+job; the session page shows both, then one card per question with the answer, its sources and open points. Edit,
+regenerate with an instruction, approve, or **Add to knowledge base** in one click (approve + promote). A session
+is an RFP with `kind = quick` (migration 0005): it stays off the pipeline, opens on `/quick/[id]` from ⌘K, and has
+"Open in workspace" for the full grid. Sessions without a client file under a per-workspace "Quick Q&A" client.
+
 **Exports** (`/rfps/[id]/exports`): the files that go to the client. **Excel** either as a fresh workbook —
 the client's own columns in their original order, then Compliance, Response, Status, Owner, Open points and
 Sources — or as the client's uploaded questionnaire *filled in*: every question is matched back to its row

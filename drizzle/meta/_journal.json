@@ -36,6 +36,13 @@
       "when": 1789553125692,
       "tag": "0004_exports_status",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1789566477574,
+      "tag": "0005_quick_sessions",
+      "breakpoints": true
     }
   ]
 }

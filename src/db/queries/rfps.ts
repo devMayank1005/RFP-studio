@@ -3,7 +3,7 @@ import { and, count, desc, eq, sql } from "drizzle-orm";
 
 import { db } from "@/db/client";
 import { clients, responses, rfpQuestions, rfps } from "@/db/schema";
-import type { EngagementType, RfpStatus } from "@/domain/enums";
+import type { EngagementType, RfpKind, RfpStatus } from "@/domain/enums";
 import { isUuid } from "@/domain/ids";
 
 /**
@@ -45,7 +45,7 @@ export async function listRfps(workspaceId: string): Promise<RfpListRow[]> {
     .innerJoin(clients, eq(rfps.clientId, clients.id))
     .leftJoin(rfpQuestions, eq(rfpQuestions.rfpId, rfps.id))
     .leftJoin(responses, eq(responses.questionId, rfpQuestions.id))
-    .where(eq(rfps.workspaceId, workspaceId))
+    .where(and(eq(rfps.workspaceId, workspaceId), eq(rfps.kind, "full")))
     .groupBy(rfps.id, clients.name)
     .orderBy(desc(rfps.updatedAt));
 
@@ -56,6 +56,7 @@ export interface RfpHeader {
   id: string;
   title: string;
   status: RfpStatus;
+  kind: RfpKind;
   engagementType: EngagementType;
   bidderOfRecord: "kognoz" | "darwinbox" | "joint";
   clientId: string;
@@ -76,6 +77,7 @@ export async function getRfpHeader(workspaceId: string, rfpId: string): Promise<
       id: rfps.id,
       title: rfps.title,
       status: rfps.status,
+      kind: rfps.kind,
       engagementType: rfps.engagementType,
       bidderOfRecord: rfps.bidderOfRecord,
       clientId: rfps.clientId,

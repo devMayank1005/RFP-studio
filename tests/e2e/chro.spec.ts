@@ -35,9 +35,9 @@ test.describe("CHRO discovery questions", () => {
     await page.getByRole("link", { name: "CHRO questions" }).click();
     await expect(page).toHaveURL(/\/chro$/);
 
-    // 11 of 24 approved in the seed: below the 80 % bar, so the amber note shows and no generate button for a reviewer.
+    // The shared demo drifts with real use: either side of the 80 % bar is fine, but a reviewer never gets the generate button.
     await expect(page.getByText(/% approved/)).toBeVisible();
-    await expect(page.getByText(/Sharpest once 80%/)).toBeVisible();
+    await expect(page.getByText(/Sharpest once 80%|Ready for discovery/)).toBeVisible();
     await expect(page.getByRole("button", { name: "Generate with Claude" })).toHaveCount(0);
 
     await page.getByRole("button", { name: "Add a question" }).first().click();

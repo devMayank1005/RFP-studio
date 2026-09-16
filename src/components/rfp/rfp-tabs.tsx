@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import type { RfpKind } from "@/domain/enums";
 import { cn } from "@/lib/utils";
 
 const TABS = [
@@ -12,17 +13,18 @@ const TABS = [
   { key: "exports", title: "Exports" },
 ] as const;
 
-/** Section tabs under the RFP header. Links, not client tabs: each is a route with its own data. */
-export function RfpTabs({ rfpId }: { rfpId: string }) {
+/** Section tabs under the RFP header. Links, not client tabs: each is a route with its own data. A Quick Q&A session has its own page plus the workspace. */
+export function RfpTabs({ rfpId, kind = "full" }: { rfpId: string; kind?: RfpKind }) {
   const pathname = usePathname();
+  const tabs = kind === "quick" ? [{ href: `/quick/${rfpId}`, title: "Quick Q&A" }, { href: `/rfps/${rfpId}/workspace`, title: "Workspace" }] : TABS.map((tab) => ({ href: `/rfps/${rfpId}/${tab.key}`, title: tab.title }));
   return (
     <nav className="-mb-px flex gap-1" aria-label="RFP sections">
-      {TABS.map((tab) => {
-        const href = `/rfps/${rfpId}/${tab.key}`;
+      {tabs.map((tab) => {
+        const href = tab.href;
         const active = pathname === href || pathname.startsWith(`${href}/`);
         return (
           <Link
-            key={tab.key}
+            key={tab.href}
             href={href}
             aria-current={active ? "page" : undefined}
             className={cn(

@@ -1,11 +1,11 @@
 "use client";
 
-import { FileText, Moon, Plus, Sun, type LucideIcon } from "lucide-react";
+import { FileText, Moon, Plus, Sun, Zap, type LucideIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
-import { RfpStatusChip } from "@/components/chips/chips";
+import { Chip, RfpStatusChip } from "@/components/chips/chips";
 import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandShortcut } from "@/components/ui/command";
 import { filterStatic, hitHref, hitValue } from "@/domain/search";
 import { useSearch } from "@/hooks/use-search";
@@ -72,6 +72,7 @@ export function CommandPaletteProvider({ children }: { children: React.ReactNode
 
   const actions: Action[] = [
     { id: "new-rfp", title: "New RFP", keywords: ["create", "add", "rfp"], icon: Plus, run: () => router.push("/rfps/new") },
+    { id: "new-quick", title: "New Quick Q&A", keywords: ["quick", "paste", "questions", "answers", "draft"], icon: Zap, run: () => router.push("/quick") },
     {
       id: "theme",
       title: resolvedTheme === "dark" ? "Switch to light" : "Switch to late shift",
@@ -118,6 +119,7 @@ export function CommandPaletteProvider({ children }: { children: React.ReactNode
                   <FileText />
                   <span className="min-w-0 truncate text-ui">{hit.title}</span>
                   <span className="shrink-0 truncate text-2xs text-muted-foreground">{hit.clientName}</span>
+                  {hit.rfpKind === "quick" && <Chip tone="teal">Quick</Chip>}
                   <CommandShortcut className="tracking-normal">
                     <RfpStatusChip status={hit.status} />
                   </CommandShortcut>

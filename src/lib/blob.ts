@@ -28,6 +28,11 @@ export function kbSourcePath(workspaceId: string, fileName: string): string {
   return `kb/${workspaceId}/sources/${safeName(fileName)}`;
 }
 
+/** A Quick Q&A paste, stored as a parsed document so the intake job reads it like a file. */
+export function rfpQuickPastePath(rfpId: string): string {
+  return `rfps/${rfpId}/parsed/paste.json`;
+}
+
 export function rfpParsedPath(rfpId: string, documentId: string): string {
   return `rfps/${rfpId}/parsed/${documentId}.json`;
 }

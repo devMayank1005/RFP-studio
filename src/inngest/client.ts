@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { EXPORT_FORMATS, KB_ENTRY_TYPES } from "@/domain/enums";
 import { EXPORT_SHAPES } from "@/domain/export";
+import { QUICK_SOURCES } from "@/domain/quick";
 import { jobRunnerConfigMessage } from "@/domain/jobs";
 import { readEnv, readSecret } from "@/lib/env";
 
@@ -54,6 +55,19 @@ export const exportRequested = eventType("rfp/export.requested", {
     format: z.enum(EXPORT_FORMATS),
     actorId: z.string(),
     options: z.object({ approvedOnly: z.boolean().optional(), shape: z.enum(EXPORT_SHAPES).optional() }).optional(),
+  }),
+});
+/** Quick Q&A intake: read the paste or file, extract questions, persist, then hand off to the draft job. */
+export const quickRequested = eventType("rfp/quick.requested", {
+  schema: z.object({
+    rfpId: z.string(),
+    jobId: z.string(),
+    actorId: z.string(),
+    source: z.enum(QUICK_SOURCES),
+    /** The uploaded file, for source = document. */
+    documentId: z.string().optional(),
+    /** The paste, already stored as a parsed document, for source = paste. */
+    parsedTextUrl: z.string().optional(),
   }),
 });
 

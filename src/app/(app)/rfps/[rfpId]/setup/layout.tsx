@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import { Stepper } from "@/components/wizard/stepper";
 import { getRfpHeader } from "@/db/queries/rfps";
@@ -8,6 +8,8 @@ export default async function SetupLayout({ children, params }: LayoutProps<"/rf
   const [session, { rfpId }] = await Promise.all([requireSession(), params]);
   const rfp = await getRfpHeader(session.workspaceId, rfpId);
   if (!rfp) notFound();
+  // A Quick Q&A session never goes through the wizard.
+  if (rfp.kind === "quick") redirect(`/quick/${rfp.id}`);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">

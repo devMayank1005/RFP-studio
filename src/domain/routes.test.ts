@@ -10,6 +10,8 @@ import { rfpLandingPath, setupStepFor, setupStepPath } from "./routes";
 describe("rfpLandingPath", () => {
   it("sends draft and parsing RFPs to setup, everything else to the workspace", () => {
     expect(rfpLandingPath("r1", "draft")).toBe("/rfps/r1/setup");
+    expect(rfpLandingPath("r1", "draft", "quick")).toBe("/quick/r1");
+    expect(rfpLandingPath("r1", "in_review", "quick")).toBe("/quick/r1");
     expect(rfpLandingPath("r1", "parsing")).toBe("/rfps/r1/setup");
     for (const status of ["questions_ready", "drafting", "in_review", "approved", "submitted", "won", "lost"] as const) {
       expect(rfpLandingPath("r1", status)).toBe("/rfps/r1/workspace");

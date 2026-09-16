@@ -7,7 +7,7 @@ import { clipText, escapeLike, filterStatic, hitHref, hitValue, isSearchable, li
  * where a hit leads, and how results are kept distinct for cmdk.
  */
 
-const rfp = (over: Partial<RfpHit> = {}): RfpHit => ({ kind: "rfp", id: "r1", title: "Apex — HRMS", clientName: "Apex", status: "in_review", ...over });
+const rfp = (over: Partial<RfpHit> = {}): RfpHit => ({ kind: "rfp", id: "r1", title: "Apex — HRMS", clientName: "Apex", status: "in_review", rfpKind: "full", ...over });
 const question = (over: Partial<QuestionHit> = {}): QuestionHit => ({ kind: "question", id: "q1", rfpId: "r1", rfpTitle: "Apex — HRMS", refNo: "A.1", text: "Single sign-on", ...over });
 
 describe("normaliseQuery / isSearchable", () => {
@@ -55,6 +55,7 @@ describe("hitHref / hitValue", () => {
     expect(hitHref(rfp({ status: "parsing" }))).toBe("/rfps/r1/setup");
     expect(hitHref(rfp({ status: "in_review" }))).toBe("/rfps/r1/workspace");
     expect(hitHref(question())).toBe("/rfps/r1/workspace?row=q1");
+    expect(hitHref(rfp({ rfpKind: "quick" }))).toBe("/quick/r1");
   });
 
   it("keeps values unique across kinds even with the same id", () => {

@@ -22,6 +22,7 @@ import {
   ownerEnum,
   parseStatusEnum,
   questionTypeEnum,
+  rfpKindEnum,
   rfpStatusEnum,
 } from "./enums";
 
@@ -42,6 +43,8 @@ export const rfps = pgTable(
     engagementType: engagementTypeEnum("engagement_type").notNull().default("hris_implementation"),
     bidderOfRecord: bidderEnum("bidder_of_record").notNull().default("joint"),
     status: rfpStatusEnum("status").notNull().default("draft"),
+    /** A full wizard RFP, or a Quick Q&A session (pasted/uploaded questions, drafted straight away). */
+    kind: rfpKindEnum("kind").notNull().default("full"),
     dueDate: date("due_date"),
     submittedAt: timestamp("submitted_at", { withTimezone: true }),
     outcomeNotes: text("outcome_notes"),

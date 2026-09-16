@@ -14,6 +14,7 @@ const LABELS: Record<string, { running: string; done: string }> = {
   draft: { running: "Drafting responses", done: "Drafts ready" },
   chro: { running: "Writing CHRO questions", done: "CHRO questions ready" },
   export: { running: "Building the export", done: "Export ready" },
+  quick: { running: "Reading the questions", done: "Questions ready" },
 };
 
 /**

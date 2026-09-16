@@ -26,13 +26,19 @@ const entries = await c.query(`delete from kb_entries where feature_name = 'E2E 
 const roles = await c.query(`update member set role = 'consultant' where user_id in (select id from "user" where email = 'dev.consultant@rfp-studio.invalid') and role <> 'consultant'`);
 const chro = await c.query(`delete from chro_questions where rfp_id in (select id from rfps where title like '%(demo)' or title = 'E2E smoke RFP')`);
 const answers = await c.query(`delete from approved_answers where origin_rfp_id in (select id from rfps where title like '%(demo)' or title = 'E2E smoke RFP')`);
+const quickBlobs = await c.query(`select coalesce(d.file_url, j.payload->>'parsedTextUrl') as url from rfps r
+  left join rfp_documents d on d.rfp_id = r.id
+  left join generation_jobs j on j.rfp_id = r.id and j.job_type = 'quick'
+  where r.kind = 'quick' and r.title like 'E2E quick%'`);
+const quickAnswers = await c.query(`delete from approved_answers where origin_rfp_id in (select id from rfps where kind = 'quick' and title like 'E2E quick%')`);
+const quick = await c.query(`delete from rfps where kind = 'quick' and title like 'E2E quick%'`);
 const exportRows = await c.query(`delete from exports where rfp_id in (select id from rfps where title like '%(demo)' or title = 'E2E smoke RFP') returning file_url`);
 const exportJobs = await c.query(`delete from generation_jobs where job_type = 'export' and rfp_id in (select id from rfps where title like '%(demo)' or title = 'E2E smoke RFP')`);
 const { rowCount } = await c.query(`delete from rfps where title = 'E2E smoke RFP'`);
 await c.end();
-const urls = exportRows.rows.map((r) => r.file_url).filter(Boolean);
+const urls = [...exportRows.rows.map((r) => r.file_url), ...quickBlobs.rows.map((r) => r.url)].filter(Boolean);
 if (urls.length && process.env.BLOB_READ_WRITE_TOKEN) {
   const { del } = await import("@vercel/blob");
   await del(urls);
 }
-console.log(`removed ${rowCount} E2E smoke RFP(s), ${exportRows.rowCount} demo export(s) (${urls.length} file(s), ${exportJobs.rowCount} job(s)), ${answers.rowCount} promoted demo answer(s), ${entries.rowCount} smoke KB entr${entries.rowCount === 1 ? 'y' : 'ies'}, ${chro.rowCount} demo CHRO question(s) and reset ${roles.rowCount} fixture role(s)`);
+console.log(`removed ${rowCount} E2E smoke RFP(s), ${quick.rowCount} quick session(s) (${quickAnswers.rowCount} precedent(s)), ${exportRows.rowCount} demo export(s) (${urls.length} file(s), ${exportJobs.rowCount} job(s)), ${answers.rowCount} promoted demo answer(s), ${entries.rowCount} smoke KB entr${entries.rowCount === 1 ? 'y' : 'ies'}, ${chro.rowCount} demo CHRO question(s) and reset ${roles.rowCount} fixture role(s)`);

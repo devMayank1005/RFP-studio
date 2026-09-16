@@ -4,18 +4,13 @@ import { NonRetriableError } from "inngest";
 import { db } from "@/db/client";
 import { bumpJobProgress, finishJob, markJobRunning, setJobProgress } from "@/db/jobs";
 import { listDocumentsForJob } from "@/db/queries/documents";
-import { clients, rfpQuestions, rfpSections, rfps } from "@/db/schema";
-import { chunk, chunkPages, type ExtractedQuestion } from "@/domain/extraction";
+import { clients, rfps } from "@/db/schema";
+import type { ExtractedQuestion } from "@/domain/extraction";
 import { writeBrief } from "@/engine/brief";
-import { resolveColumns } from "@/engine/columns";
-import { extractFromPages, extractFromSheet } from "@/engine/extract";
-import type { ParsedDocument } from "@/lib/parsing";
 
 import { extractRequested, inngest } from "./client";
+import { countChunks, extractParsedDocument, persistExtractedQuestions } from "./extract-shared";
 import { loadParsed } from "./parse";
-
-const ROWS_PER_CHUNK = 40;
-const MIN_ROWS_FOR_A_SHEET = 3;
 
 interface DocPlan {
   documentId: string;
@@ -64,11 +59,7 @@ export const extractQuestions = inngest.createFunction(
           pointers.push(`# ${d.fileName}\n${doc.text.slice(0, 20_000)}`);
           continue;
         }
-        const chunks =
-          doc.kind === "xlsx"
-            ? (doc.sheets ?? []).filter((s) => s.rows.length >= MIN_ROWS_FOR_A_SHEET).reduce((n, s) => n + chunk(s.rows, ROWS_PER_CHUNK).length, 0)
-            : chunkPages(doc.pages ?? [], 6_000).length;
-        questionDocs.push({ documentId: d.id, kind: d.kind, parsedTextUrl: d.parsedTextUrl!, chunks });
+        questionDocs.push({ documentId: d.id, kind: d.kind, parsedTextUrl: d.parsedTextUrl!, chunks: countChunks(doc) });
       }
       // Chunks + the brief + persisting, so the bar reaches the end only when everything is written.
       await setJobProgress(jobId, 0, questionDocs.reduce((n, d) => n + d.chunks, 0) + 2);
@@ -79,32 +70,9 @@ export const extractQuestions = inngest.createFunction(
     let knownSections: string[] = [];
     for (const doc of plan.docs) {
       const result = await step.run(`extract-${doc.documentId}`, async (): Promise<DocResult> => {
-        const parsed: ParsedDocument = await loadParsed(doc.parsedTextUrl);
-        const questions: ExtractedQuestion[] = [];
-        let sections = [...knownSections];
-        let narrative = "";
-
-        if (parsed.kind === "xlsx") {
-          for (const sheet of (parsed.sheets ?? []).filter((s) => s.rows.length >= MIN_ROWS_FOR_A_SHEET)) {
-            const cols = await resolveColumns(sheet);
-            if (!cols.map.hasQuestion) continue;
-            const r = await extractFromSheet(sheet, cols.map, {
-              knownSections: sections,
-              onProgress: () => bumpJobProgress(jobId),
-            });
-            questions.push(...r.questions);
-            sections = r.sections;
-          }
-        } else {
-          narrative = parsed.text;
-          const r = await extractFromPages(parsed.pages ?? [], {
-            knownSections: sections,
-            onProgress: () => bumpJobProgress(jobId),
-          });
-          questions.push(...r.questions);
-          sections = r.sections;
-        }
-        return { documentId: doc.documentId, questions, sections, narrative };
+        const parsed = await loadParsed(doc.parsedTextUrl);
+        const r = await extractParsedDocument(parsed, { knownSections, onProgress: () => bumpJobProgress(jobId) });
+        return { documentId: doc.documentId, ...r };
       });
       results.push(result);
       knownSections = result.sections;
@@ -137,43 +105,11 @@ export const extractQuestions = inngest.createFunction(
 
       const all = results.flatMap((r) => r.questions.map((q) => ({ ...q, documentId: r.documentId })));
       return db.transaction(async (tx) => {
-        await tx.delete(rfpQuestions).where(eq(rfpQuestions.rfpId, rfpId));
-        await tx.delete(rfpSections).where(eq(rfpSections.rfpId, rfpId));
-
-        const sectionIds = new Map<string, string>();
-        for (const [i, title] of knownSections.entries()) {
-          const [s] = await tx.insert(rfpSections).values({ rfpId, title, sortOrder: i }).returning({ id: rfpSections.id });
-          sectionIds.set(title.toLowerCase(), s.id);
-        }
-        // Re-number across documents so refs stay unique when two sheets both start at 1.
-        const seen = new Set<string>();
-        const rows = all.map((q, i) => {
-          let refNo = q.refNo;
-          if (seen.has(refNo)) refNo = `${refNo}·${i + 1}`;
-          seen.add(refNo);
-          return {
-            rfpId,
-            sectionId: sectionIds.get(q.sectionTitle.toLowerCase()) ?? null,
-            refNo,
-            questionText: q.questionText,
-            acceptanceCriteria: q.acceptanceCriteria,
-            questionType: q.questionType,
-            isMandatory: q.isMandatory,
-            owner: q.owner,
-            moduleHint: q.moduleHint,
-            rawMeta: q.rawMeta,
-            existingAnswer: q.existing && (q.existing.answer || q.existing.compliance || q.existing.questions) ? q.existing : null,
-            sourceDocumentId: q.documentId,
-            sourceRow: q.sourceRow ?? q.sourcePage,
-            sortOrder: i,
-          };
-        });
-        for (const batch of chunk(rows, 200)) await tx.insert(rfpQuestions).values(batch);
-
+        const written = await persistExtractedQuestions(tx, rfpId, all, knownSections);
         await tx.update(rfps).set({ contextSummary: brief.context_summary }).where(eq(rfps.id, rfpId));
         await bumpJobProgress(jobId);
         await finishJob(jobId, "done");
-        return { questions: rows.length, sections: knownSections.length, withExisting: rows.filter((r) => r.existingAnswer).length };
+        return written;
       });
     });
 

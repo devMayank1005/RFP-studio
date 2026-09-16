@@ -1,4 +1,4 @@
-import type { RfpStatus } from "./enums";
+import type { RfpKind, RfpStatus } from "./enums";
 
 /**
  * Where a link into an RFP should land. Pure so the dashboard, the RFP index
@@ -8,7 +8,8 @@ import type { RfpStatus } from "./enums";
 /** Statuses in which the question list is not confirmed yet: the RFP lives in the wizard. */
 export const INTAKE_STATUSES: readonly RfpStatus[] = ["draft", "parsing"];
 
-export function rfpLandingPath(rfpId: string, status: RfpStatus): string {
+export function rfpLandingPath(rfpId: string, status: RfpStatus, kind: RfpKind = "full"): string {
+  if (kind === "quick") return `/quick/${rfpId}`;
   return INTAKE_STATUSES.includes(status) ? `/rfps/${rfpId}/setup` : `/rfps/${rfpId}/workspace`;
 }
 

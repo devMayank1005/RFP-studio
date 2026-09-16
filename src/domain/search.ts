@@ -1,4 +1,4 @@
-import type { RfpStatus } from "./enums";
+import type { RfpKind, RfpStatus } from "./enums";
 import { rfpLandingPath } from "./routes";
 
 /**
@@ -46,6 +46,8 @@ export interface RfpHit {
   title: string;
   clientName: string;
   status: RfpStatus;
+  /** A Quick Q&A session opens on its own page, not the workspace. */
+  rfpKind: RfpKind;
 }
 
 export interface QuestionHit {
@@ -68,7 +70,7 @@ export const EMPTY_SEARCH: SearchResults = { rfps: [], questions: [] };
 
 /** An RFP lands where it lives (setup while in intake, else the workspace); a question opens its workspace with that row selected. */
 export function hitHref(hit: SearchHit): string {
-  return hit.kind === "rfp" ? rfpLandingPath(hit.id, hit.status) : `/rfps/${hit.rfpId}/workspace?row=${hit.id}`;
+  return hit.kind === "rfp" ? rfpLandingPath(hit.id, hit.status, hit.rfpKind) : `/rfps/${hit.rfpId}/workspace?row=${hit.id}`;
 }
 
 /** cmdk's item value must be unique and stable; titles may repeat, ids do not. */
