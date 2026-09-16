@@ -1,16 +1,17 @@
 "use client";
 
-import { ArrowRight, FileSpreadsheet, FileText, Trash2 } from "lucide-react";
+import { ArrowRight, FileSpreadsheet, FileText, RotateCcw, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 
-import { deleteDocument, startExtraction } from "@/app/actions/documents";
+import { deleteDocument, retryParse, startExtraction } from "@/app/actions/documents";
 import { Chip, type ChipTone } from "@/components/chips/chips";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import type { DocumentRow } from "@/db/queries/documents";
 import { DOCUMENT_KIND_LABEL, type ParseStatus } from "@/domain/enums";
+import { isStaleQueuedJob } from "@/domain/jobs";
 
 const PARSE_TONE: Record<ParseStatus, ChipTone> = { pending: "neutral", parsing: "teal", parsed: "green", failed: "red" };
 const PARSE_LABEL: Record<ParseStatus, string> = { pending: "Queued", parsing: "Parsing", parsed: "Parsed", failed: "Failed" };
@@ -25,12 +26,15 @@ function formatBytes(n: number): string {
  * the poll); once every question-bearing document is parsed, extraction
  * can start.
  */
-export function DocumentList({ rfpId, documents, locked }: { rfpId: string; documents: DocumentRow[]; locked: boolean }) {
+export function DocumentList({ rfpId, documents, locked, now }: { rfpId: string; documents: DocumentRow[]; locked: boolean; now: Date }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [retrying, setRetrying] = useState<string | null>(null);
 
-  const anyParsing = documents.some((d) => d.parseStatus === "pending" || d.parseStatus === "parsing");
+  // A document pending for more than five minutes was never picked up — stop polling and offer a retry.
+  const stale = (d: DocumentRow) => d.parseStatus === "pending" && isStaleQueuedJob({ status: "pending", createdAt: d.createdAt }, now);
+  const anyParsing = documents.some((d) => d.parseStatus === "parsing" || (d.parseStatus === "pending" && !stale(d)));
   useEffect(() => {
     if (!anyParsing) return;
     const t = setInterval(() => router.refresh(), 2000);
@@ -49,6 +53,15 @@ export function DocumentList({ rfpId, documents, locked }: { rfpId: string; docu
       }
       router.push(`/rfps/${rfpId}/setup/questions`);
     });
+  }
+
+  async function retry(doc: DocumentRow) {
+    setRetrying(doc.id);
+    const result = await retryParse(rfpId, doc.id);
+    setRetrying(null);
+    if (!result.ok) return void toast.error(result.error);
+    toast.success("Parsing again", { description: doc.fileName });
+    router.refresh();
   }
 
   async function remove(doc: DocumentRow) {
@@ -75,9 +88,21 @@ export function DocumentList({ rfpId, documents, locked }: { rfpId: string; docu
                 {d.parseError ? ` · ${d.parseError}` : ""}
               </div>
             </div>
-            <Chip tone={PARSE_TONE[d.parseStatus]} dot>
-              {PARSE_LABEL[d.parseStatus]}
-            </Chip>
+            {stale(d) ? (
+              <Chip tone="amber" dot title="The job runner never took this document. Retry once background jobs are configured.">
+                Not picked up
+              </Chip>
+            ) : (
+              <Chip tone={PARSE_TONE[d.parseStatus]} dot>
+                {PARSE_LABEL[d.parseStatus]}
+              </Chip>
+            )}
+            {!locked && (d.parseStatus === "failed" || stale(d)) && (
+              <Button variant="outline" size="xs" onClick={() => retry(d)} disabled={retrying === d.id} aria-label={`Retry parsing ${d.fileName}`}>
+                {retrying === d.id ? <Spinner className="size-3" /> : <RotateCcw />}
+                Retry
+              </Button>
+            )}
             {!locked && (
               <Button variant="ghost" size="icon-xs" aria-label={`Delete ${d.fileName}`} onClick={() => remove(d)} disabled={deleting === d.id}>
                 {deleting === d.id ? <Spinner className="size-3" /> : <Trash2 />}

@@ -2,6 +2,7 @@ import { Inngest, eventType } from "inngest";
 import { z } from "zod";
 
 import { KB_ENTRY_TYPES } from "@/domain/enums";
+import { jobRunnerConfigMessage } from "@/domain/jobs";
 import { readEnv, readSecret } from "@/lib/env";
 
 /**
@@ -50,11 +51,21 @@ export const kbIngestRequested = eventType("kb/ingest.requested", {
  * own env lookup, so a multi-line paste cannot silently break event delivery.
  * Locally neither is needed: `pnpm inngest:dev` discovers /api/inngest itself.
  */
+// Outside a production build (dev server, tsx scripts) events go to the
+// local dev server at :8288 and need no key. INNGEST_DEV=1 forces it.
+const cloudMode = process.env.NODE_ENV === "production" && readEnv("INNGEST_DEV") !== "1";
+
 export const inngest = new Inngest({
   id: "rfp-studio",
   eventKey: readSecret("INNGEST_EVENT_KEY"),
   signingKey: readSecret("INNGEST_SIGNING_KEY"),
-  // Outside a production build (dev server, tsx scripts) events go to the
-  // local dev server at :8288 and need no key. INNGEST_DEV=1 forces it.
-  isDev: process.env.NODE_ENV !== "production" || readEnv("INNGEST_DEV") === "1",
+  isDev: !cloudMode,
 });
+
+/**
+ * Null when jobs can be sent; otherwise the reason, for actions to refuse
+ * before they write a row. Read per call: the dev server reloads .env.local.
+ */
+export function jobsConfigError(): string | null {
+  return jobRunnerConfigMessage({ cloudMode, hasEventKey: !!readSecret("INNGEST_EVENT_KEY") });
+}

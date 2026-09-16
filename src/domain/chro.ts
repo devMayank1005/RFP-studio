@@ -17,12 +17,7 @@ export const CHRO_THEME_HINT: Record<ChroTheme, string> = {
   governance_culture: "Sponsorship, decision rights, change readiness, unions",
 };
 
-/** A queued job older than this was never picked up (Inngest app not registered); treat it as dead. */
-export const STALE_QUEUE_MS = 5 * 60 * 1000;
-
-export function isStaleQueuedJob(job: { status: string; createdAt: Date | string } | null, now = new Date()): boolean {
-  return !!job && job.status === "queued" && now.getTime() - new Date(job.createdAt).getTime() > STALE_QUEUE_MS;
-}
+export { STALE_QUEUE_MS, isStaleQueuedJob } from "./jobs";
 
 export function chroReadiness(input: { approved: number; total: number }): { approved: number; total: number; pct: number; ready: boolean } {
   const { approved, total } = input;

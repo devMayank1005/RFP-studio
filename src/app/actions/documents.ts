@@ -1,20 +1,26 @@
 "use server";
 
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { writeAudit } from "@/db/audit";
 import { db } from "@/db/client";
 import { createJob } from "@/db/jobs";
-import { rfpDocuments, rfps } from "@/db/schema";
+import { generationJobs, rfpDocuments, rfps } from "@/db/schema";
 import { DOCUMENT_KINDS, type DocumentKind } from "@/domain/enums";
-import { documentUploaded, extractRequested, inngest } from "@/inngest/client";
+import { documentUploaded, extractRequested } from "@/inngest/client";
 import { ActionError, requireCan, requireRfp, runAction, type ActionResult } from "@/lib/actions";
 import { deletePrivate, rfpUploadPath, uploadPrivate } from "@/lib/blob";
+import { requireJobRunner, sendJobEvent } from "@/lib/jobs";
 import { detectKind } from "@/lib/parsing";
 
 const MAX_BYTES = 20 * 1024 * 1024;
+
+/** A document whose parse job never reached the runner is shown as failed with the reason, not "Queued" forever. */
+async function markParseFailed(documentId: string, reason: string) {
+  await db.update(rfpDocuments).set({ parseStatus: "failed", parseError: `Not queued: ${reason}` }).where(eq(rfpDocuments.id, documentId));
+}
 
 /**
  * Wizard step 2. Each file goes to private Blob storage, gets a document row
@@ -26,6 +32,7 @@ export async function uploadDocuments(rfpId: string, formData: FormData): Promis
     const session = await requireCan("rfp.edit");
     const rfp = await requireRfp(session, rfpId);
     if (!["draft", "parsing"].includes(rfp.status)) throw new ActionError("Documents can only be added before questions are confirmed.");
+    requireJobRunner();
 
     const files = formData.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
     const kinds = formData.getAll("kinds").map(String);
@@ -52,7 +59,7 @@ export async function uploadDocuments(rfpId: string, formData: FormData): Promis
         .returning({ id: rfpDocuments.id });
 
       const jobId = await createJob({ rfpId, jobType: "parse", payload: { documentId: doc.id, fileName: file.name }, createdBy: session.userId, progressTotal: 1 });
-      await inngest.send(documentUploaded.create({ rfpId, documentId: doc.id, jobId }));
+      await sendJobEvent(documentUploaded.create({ rfpId, documentId: doc.id, jobId }), { jobId, onFailure: (reason) => markParseFailed(doc.id, reason) });
       jobIds.push(jobId);
 
       await writeAudit(db, {
@@ -117,9 +124,10 @@ export async function startExtraction(rfpId: string): Promise<ActionResult<{ job
         ),
       );
     if (!parsed.length) throw new ActionError("Upload and parse at least one RFP document first.");
+    requireJobRunner();
 
     const jobId = await createJob({ rfpId, jobType: "extract", payload: { documentIds: parsed.map((d) => d.id) }, createdBy: session.userId });
-    await inngest.send(extractRequested.create({ rfpId, jobId }));
+    await sendJobEvent(extractRequested.create({ rfpId, jobId }), { jobId });
     await writeAudit(db, {
       workspaceId: session.workspaceId,
       actorId: session.userId,
@@ -129,6 +137,41 @@ export async function startExtraction(rfpId: string): Promise<ActionResult<{ job
       diff: { jobId, documents: parsed.length },
     });
     revalidatePath(`/rfps/${rfpId}/setup/questions`);
+    return { jobId };
+  });
+}
+
+/**
+ * Parse a document again — after a failure, or when its first job was never
+ * picked up (the Inngest app was not registered at the time). Any queued parse
+ * job for the document is retired first so the list shows one truth.
+ */
+export async function retryParse(rfpId: string, documentId: string): Promise<ActionResult<{ jobId: string }>> {
+  return runAction(async () => {
+    const session = await requireCan("rfp.edit");
+    const rfp = await requireRfp(session, rfpId);
+    if (!["draft", "parsing"].includes(rfp.status)) throw new ActionError("Documents are locked once questions are confirmed.");
+    requireJobRunner();
+
+    const [doc] = await db
+      .select({ id: rfpDocuments.id, fileName: rfpDocuments.fileName, parseStatus: rfpDocuments.parseStatus })
+      .from(rfpDocuments)
+      .where(and(eq(rfpDocuments.id, documentId), eq(rfpDocuments.rfpId, rfpId)))
+      .limit(1);
+    if (!doc) throw new ActionError("Document not found.");
+    if (doc.parseStatus === "parsed") throw new ActionError("This document is already parsed.");
+    if (doc.parseStatus === "parsing") throw new ActionError("This document is being parsed right now.");
+
+    await db
+      .update(generationJobs)
+      .set({ status: "failed", error: "Superseded by a retry.", finishedAt: new Date() })
+      .where(and(eq(generationJobs.rfpId, rfpId), eq(generationJobs.jobType, "parse"), eq(generationJobs.status, "queued"), sql`${generationJobs.payload}->>'documentId' = ${doc.id}`));
+    await db.update(rfpDocuments).set({ parseStatus: "pending", parseError: null }).where(eq(rfpDocuments.id, doc.id));
+
+    const jobId = await createJob({ rfpId, jobType: "parse", payload: { documentId: doc.id, fileName: doc.fileName, retry: true }, createdBy: session.userId, progressTotal: 1 });
+    await sendJobEvent(documentUploaded.create({ rfpId, documentId: doc.id, jobId }), { jobId, onFailure: (reason) => markParseFailed(doc.id, reason) });
+    await writeAudit(db, { workspaceId: session.workspaceId, actorId: session.userId, entity: "rfp_document", entityId: doc.id, action: "document.parse_retried", diff: { fileName: doc.fileName, jobId } });
+    revalidatePath(`/rfps/${rfpId}/setup/upload`);
     return { jobId };
   });
 }
