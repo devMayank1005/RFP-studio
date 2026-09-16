@@ -27,7 +27,7 @@ export default async function UploadPage({ params }: PageProps<"/rfps/[rfpId]/se
         </p>
       </div>
       {!locked && <UploadDropzone rfpId={rfpId} />}
-      <DocumentList rfpId={rfpId} documents={documents} locked={locked} />
+      <DocumentList rfpId={rfpId} documents={documents} locked={locked} now={new Date()} />
       {locked && (
         <p className="flex items-start gap-2 rounded-md border bg-muted/50 p-3 text-ui text-muted-foreground">
           <Info className="mt-0.5 size-4 shrink-0" />

@@ -12,8 +12,9 @@ import { chroQuestions } from "@/db/schema";
 import { assignSortOrders, isStaleQueuedJob, swapNeighbour } from "@/domain/chro";
 import { CHRO_STATUSES, CHRO_THEMES, type ChroStatus, type ChroTheme } from "@/domain/enums";
 import { engineConfigError } from "@/engine/client";
-import { chroRequested, inngest } from "@/inngest/client";
+import { chroRequested } from "@/inngest/client";
 import { ActionError, requireCan, requireRfp, runAction, type ActionResult } from "@/lib/actions";
+import { requireJobRunner, sendJobEvent } from "@/lib/jobs";
 
 /**
  * The CHRO tab's mutations. Generation is a job (Opus takes a minute or
@@ -44,6 +45,7 @@ export async function requestChroQuestions(rfpId: string, mode: "replace_suggest
     const session = await requireCan("rfp.edit");
     const rfp = await requireRfp(session, rfpId);
     if (engineConfigError) throw new ActionError(engineConfigError);
+    requireJobRunner();
     const running = await latestJob(rfp.id, "chro");
     if (running && isStaleQueuedJob(running)) {
       // Nothing picked it up — the Inngest app was not registered when it was sent. Retire it so the button works again.
@@ -55,7 +57,7 @@ export async function requestChroQuestions(rfpId: string, mode: "replace_suggest
     if (!sources.some((s) => s.status !== null)) throw new ActionError("Draft and approve some answers first — the questions come from them.");
 
     const jobId = await createJob({ rfpId: rfp.id, jobType: "chro", payload: { mode }, createdBy: session.userId, progressTotal: 3 });
-    await inngest.send(chroRequested.create({ rfpId: rfp.id, jobId, actorId: session.userId, mode }));
+    await sendJobEvent(chroRequested.create({ rfpId: rfp.id, jobId, actorId: session.userId, mode }), { jobId });
     await writeAudit(db, { workspaceId: session.workspaceId, actorId: session.userId, entity: "rfp", entityId: rfp.id, action: "chro.generate.started", diff: { jobId, mode } });
     revalidatePath(pagePath(rfp.id));
     return { jobId };

@@ -67,7 +67,9 @@ the function log, until step 1 is done.
    `BETTER_AUTH_SECRET` is `openssl rand -base64 32`; `BETTER_AUTH_URL` is the production origin
    with no trailing slash; `MICROSOFT_TENANT_ID` is the Kognoz tenant GUID.
 2. Create an Inngest app (inngest.com), add `INNGEST_EVENT_KEY` and `INNGEST_SIGNING_KEY` the same
-   way. Without them a production build sends nothing: uploads sit at "queued" forever.
+   way. Without them a production build cannot send jobs: uploads, extraction, drafting, CHRO generation and
+   KB ingest refuse up front with the variable named. A document whose job was never picked up shows
+   "Not picked up" on the upload step with a Retry.
 3. Run `pnpm db:migrate` against the production `DATABASE_URL_UNPOOLED`, then `db:seed` and `kb:seed`
    (the KB seed needs `VOYAGE_API_KEY` in the shell to embed).
 4. Deploy: `vercel deploy --prod`. A plain `vercel deploy --target=preview` makes a preview first;

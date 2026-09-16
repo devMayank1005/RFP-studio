@@ -72,7 +72,13 @@ export function JobProgress({
       </div>
       {job?.status === "queued" && (
         <p className="mt-2 text-2xs text-muted-foreground">
-          Waiting for a worker. In development, make sure <code className="font-mono">pnpm inngest:dev</code> is running.
+          {process.env.NODE_ENV !== "production" ? (
+            <>
+              Waiting for a worker. In development, make sure <code className="font-mono">pnpm inngest:dev</code> is running.
+            </>
+          ) : (
+            "Waiting for the job runner. If this stays queued, the Inngest keys are missing or the app is not registered — see README › Deploying."
+          )}
         </p>
       )}
       {failed && onRetry && (

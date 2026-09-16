@@ -6,7 +6,7 @@ import { z } from "zod";
 
 import { writeAudit } from "@/db/audit";
 import { db } from "@/db/client";
-import { upsertKbSource } from "@/db/kb-ingest";
+import { finishKbSource, upsertKbSource } from "@/db/kb-ingest";
 import { getApprovedAnswer, getKbEntry, getKbSource, listKbEntries } from "@/db/queries/kb";
 import { approvedAnswers, clients, kbEntries, kbSources, responseRevisions, responses, rfpQuestions } from "@/db/schema";
 import { KB_ENTRY_TYPES, KB_SOURCE_KINDS } from "@/domain/enums";
@@ -14,9 +14,10 @@ import { approvedAnswerInputSchema, embedFieldsChanged, kbEntryInputSchema } fro
 import { engineConfigError } from "@/engine/client";
 import { approvedAnswerEmbedText, embedConfigError, embedDocuments, kbEntryEmbedText } from "@/engine/embed";
 import { generaliseAnswer } from "@/engine/generalise";
-import { inngest, kbIngestRequested } from "@/inngest/client";
+import { kbIngestRequested } from "@/inngest/client";
 import { ActionError, parseInput, requireCan, requireRfp, runAction, type ActionResult } from "@/lib/actions";
 import { kbSourcePath, uploadPrivate } from "@/lib/blob";
+import { requireJobRunner, sendJobEvent } from "@/lib/jobs";
 import { detectKind } from "@/lib/parsing";
 
 /**
@@ -240,6 +241,7 @@ export async function ingestKbDocument(formData: FormData): Promise<ActionResult
   return runAction(async () => {
     const session = await requireCan("kb.edit");
     if (engineConfigError) throw new ActionError(engineConfigError);
+    requireJobRunner();
 
     const file = formData.get("file");
     if (!(file instanceof File) || file.size === 0) throw new ActionError("Choose a PDF or DOCX document.");
@@ -252,7 +254,9 @@ export async function ingestKbDocument(formData: FormData): Promise<ActionResult
 
     const { url } = await uploadPrivate(kbSourcePath(session.workspaceId, file.name), file, file.type || undefined);
     const sourceId = await upsertKbSource({ workspaceId: session.workspaceId, sourceName: file.name, kind, fileUrl: url, status: "queued" });
-    await inngest.send(kbIngestRequested.create({ sourceId, workspaceId: session.workspaceId, sourceName: file.name, fileUrl: url, product, entryType, actorId: session.userId }));
+    await sendJobEvent(kbIngestRequested.create({ sourceId, workspaceId: session.workspaceId, sourceName: file.name, fileUrl: url, product, entryType, actorId: session.userId }), {
+      onFailure: (reason) => finishKbSource(sourceId, "failed", { error: `Not queued: ${reason}` }),
+    });
     await writeAudit(db, { workspaceId: session.workspaceId, actorId: session.userId, entity: "kb_source", entityId: sourceId, action: "kb.source_ingest_requested", diff: { fileName: file.name, kind, product, entryType, sizeBytes: file.size } });
     revalidatePath("/kb");
     return { sourceId };
@@ -264,6 +268,7 @@ export async function reingestKbSource(sourceId: string): Promise<ActionResult> 
   return runAction(async () => {
     const session = await requireCan("kb.edit");
     if (engineConfigError) throw new ActionError(engineConfigError);
+    requireJobRunner();
     const source = await getKbSource(session.workspaceId, z.string().uuid().parse(sourceId));
     if (!source) throw new ActionError("That source is not in your workspace.");
     if (!source.fileUrl) throw new ActionError("This source was ingested from the command line and has no stored file. Run pnpm kb:ingest again.");
@@ -273,7 +278,9 @@ export async function reingestKbSource(sourceId: string): Promise<ActionResult> 
     const entryType = source.dominantType ?? "darwinbox_capability";
     const product = first?.product ?? "Darwinbox";
     await db.update(kbSources).set({ status: "queued", error: null, progressDone: 0, progressTotal: 0 }).where(eq(kbSources.id, source.id));
-    await inngest.send(kbIngestRequested.create({ sourceId: source.id, workspaceId: session.workspaceId, sourceName: source.name, fileUrl: source.fileUrl, product, entryType, actorId: session.userId }));
+    await sendJobEvent(kbIngestRequested.create({ sourceId: source.id, workspaceId: session.workspaceId, sourceName: source.name, fileUrl: source.fileUrl, product, entryType, actorId: session.userId }), {
+      onFailure: (reason) => finishKbSource(source.id, "failed", { error: `Not queued: ${reason}` }),
+    });
     await writeAudit(db, { workspaceId: session.workspaceId, actorId: session.userId, entity: "kb_source", entityId: source.id, action: "kb.source_reingest_requested", diff: { fileName: source.name } });
     revalidatePath("/kb");
     return undefined;
