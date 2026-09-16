@@ -60,3 +60,5 @@ AGENTS.md
 .env.local
 # extraction dumps from scripts/extract-one.ts
 fixtures/**/*.extracted.json
+.claude
+.agents
