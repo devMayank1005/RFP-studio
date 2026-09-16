@@ -94,7 +94,8 @@ src/components/  shell, chips, dashboard, wizard, workspace
 Flow: **New RFP** (client) → **Upload** (private Blob, parse job) → **Questions** (extraction job:
 column roles, per-chunk classification, sections, context brief) → **Confirm** (optionally import a
 vendor's earlier answers) → **Workspace** (draft with Claude, review with J/K/A, regenerate with an
-instruction, every revision and citation kept).
+instruction, every revision and citation kept; **Add to KB** turns an approved answer into a reusable,
+client-neutral passage future drafts retrieve).
 
 ## Scripts
 
@@ -102,7 +103,7 @@ instruction, every revision and citation kept).
 pnpm dev · build · lint · typecheck · test · test:e2e
 pnpm db:generate · db:migrate · db:push · db:studio · db:seed · db:ping · db:check-auth
 pnpm kb:seed                                    embed KB entries / approved answers missing a vector
-pnpm kb:ingest <file>                           (milestone 2) PDF/DOCX → KB entries
+pnpm kb:ingest <file> [--dry-run]               PDF/DOCX product doc → KB entries (idempotent per file)
 pnpm exec tsx scripts/extract-one.ts <file>     run extraction on a file and print what it found
 pnpm exec tsx scripts/simulate-upload.ts <rfpId> <file> [kind]   attach a file without the browser
 pnpm exec tsx scripts/make-fixtures.ts          regenerate the synthetic fixtures
