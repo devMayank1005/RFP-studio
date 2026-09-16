@@ -25,7 +25,7 @@ const MAX_TAGS = 3;
  * keyboard-first like the review grid: J/K move, Enter opens, N starts a new
  * entry. Opening sets `entry` in the URL so a row is a shareable link.
  */
-export function EntryList({ rows, tab, grouped, canEdit, filtered }: { rows: KbEntryRow[]; tab: KbEntryTab; grouped: boolean; canEdit: boolean; filtered: boolean }) {
+export function EntryList({ rows, tab, grouped, canEdit, filtered, now }: { rows: KbEntryRow[]; tab: KbEntryTab; grouped: boolean; canEdit: boolean; filtered: boolean; now: Date }) {
   const [, setParams] = useQueryStates(kbParsers, { shallow: true, history: "push" });
   const [focusedId, setActiveId] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -92,7 +92,6 @@ export function EntryList({ rows, tab, grouped, canEdit, filtered }: { rows: KbE
 
   const groups = grouped ? groupEntriesByModule(rows) : [{ module: null, rows }];
   const showType = tab === "services";
-  const now = new Date();
 
   return (
     <div ref={listRef} className="p-6" role="list" aria-label="Knowledge base entries">

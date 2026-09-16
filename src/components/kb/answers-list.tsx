@@ -14,9 +14,8 @@ import { timeAgo } from "@/domain/dates";
 import { kbParsers } from "./params";
 
 /** The flywheel: every answer a reviewer promoted, with how often drafts have leaned on it since. */
-export function AnswersList({ rows, filtered }: { rows: ApprovedAnswerRow[]; filtered: boolean }) {
+export function AnswersList({ rows, filtered, now }: { rows: ApprovedAnswerRow[]; filtered: boolean; now: Date }) {
   const [, setParams] = useQueryStates(kbParsers, { shallow: true, history: "push" });
-  const now = new Date();
 
   if (!rows.length) {
     return filtered ? (

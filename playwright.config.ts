@@ -10,6 +10,9 @@ export default defineConfig({
   timeout: 60_000,
   expect: { timeout: 10_000 },
   fullyParallel: false,
+  // One worker: every spec shares the development database and the cleanup script; two files
+  // running side by side would delete each other's rows mid-test.
+  workers: 1,
   retries: 0,
   reporter: [["list"]],
   use: {

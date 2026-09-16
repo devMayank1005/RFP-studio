@@ -56,7 +56,7 @@ function draftFrom(entry: KbEntryRow | null, tab: KbEntryTab): Draft {
  * that hide it. The form is keyed by id so moving between entries never
  * carries a half-typed field across.
  */
-export function EntryEditor({ rows, fallbackEntry, tab, canEdit }: { rows: KbEntryRow[]; fallbackEntry: KbEntryRow | null; tab: KbEntryTab; canEdit: boolean }) {
+export function EntryEditor({ rows, fallbackEntry, tab, canEdit, now }: { rows: KbEntryRow[]; fallbackEntry: KbEntryRow | null; tab: KbEntryTab; canEdit: boolean; now: Date }) {
   const [params, setParams] = useQueryStates(kbParsers, { shallow: true, history: "replace" });
   const entry = params.entry && params.entry !== "new" ? (rows.find((r) => r.id === params.entry) ?? (fallbackEntry?.id === params.entry ? fallbackEntry : null)) : null;
   const open = params.entry === "new" || entry !== null;
@@ -65,13 +65,13 @@ export function EntryEditor({ rows, fallbackEntry, tab, canEdit }: { rows: KbEnt
   return (
     <Sheet open={open} onOpenChange={(o) => !o && close()}>
       <SheetContent side="right" className="w-full gap-0 p-0 data-[side=right]:sm:max-w-xl">
-        {open && <EntryForm key={entry?.id ?? "new"} entry={entry} tab={tab} canEdit={canEdit} onClose={close} />}
+        {open && <EntryForm key={entry?.id ?? "new"} entry={entry} tab={tab} canEdit={canEdit} now={now} onClose={close} />}
       </SheetContent>
     </Sheet>
   );
 }
 
-function EntryForm({ entry, tab, canEdit, onClose }: { entry: KbEntryRow | null; tab: KbEntryTab; canEdit: boolean; onClose: () => void }) {
+function EntryForm({ entry, tab, canEdit, now, onClose }: { entry: KbEntryRow | null; tab: KbEntryTab; canEdit: boolean; now: Date; onClose: () => void }) {
   const router = useRouter();
   const [draft, setDraft] = useState<Draft>(() => draftFrom(entry, tab));
   const [errors, setErrors] = useState<Record<string, string[]>>({});
@@ -126,7 +126,7 @@ function EntryForm({ entry, tab, canEdit, onClose }: { entry: KbEntryRow | null;
         <SheetDescription className="text-2xs">
           {entry ? (
             <span className="flex flex-wrap items-center gap-1.5">
-              Updated {timeAgo(new Date(entry.updatedAt))}
+              Updated {timeAgo(new Date(entry.updatedAt), now)}
               {entry.sourceName ? <> · from {entry.sourceName}</> : null}
               {entry.embedded ? <Chip tone="teal">Embedded</Chip> : <Chip tone="amber">Not embedded</Chip>}
               {!entry.isActive && <Chip tone="outline">Inactive</Chip>}

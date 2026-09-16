@@ -26,6 +26,8 @@ export const metadata: Metadata = { title: "Knowledge base" };
 export default async function KnowledgeBasePage({ searchParams }: PageProps<"/kb">) {
   const [session, params] = await Promise.all([requireSession(), loadKbParams(searchParams)]);
   const canEdit = can(session.role, "kb.edit");
+  // One clock for the whole render: relative times must hydrate to the same text they were served with.
+  const now = new Date();
   const moduleFilter = params.module ?? null;
   const tab = params.tab;
   const entryTab = tab === "capabilities" || tab === "services";
@@ -55,8 +57,8 @@ export default async function KnowledgeBasePage({ searchParams }: PageProps<"/kb
     const filtered = Boolean(params.q || moduleFilter || params.source || params.inactive);
     content = (
       <>
-        <EntryList rows={rows} tab={tab} grouped={!moduleFilter} canEdit={canEdit} filtered={filtered} />
-        <EntryEditor rows={rows} fallbackEntry={editorEntry} tab={tab} canEdit={canEdit} />
+        <EntryList rows={rows} tab={tab} grouped={!moduleFilter} canEdit={canEdit} filtered={filtered} now={now} />
+        <EntryEditor rows={rows} fallbackEntry={editorEntry} tab={tab} canEdit={canEdit} now={now} />
       </>
     );
   } else if (tab === "answers") {
@@ -65,8 +67,8 @@ export default async function KnowledgeBasePage({ searchParams }: PageProps<"/kb
     total = counts.answers;
     content = (
       <>
-        <AnswersList rows={rows} filtered={Boolean(params.q || moduleFilter)} />
-        <AnswerEditor rows={rows} fallbackAnswer={editorAnswer} canEdit={canEdit} />
+        <AnswersList rows={rows} filtered={Boolean(params.q || moduleFilter)} now={now} />
+        <AnswerEditor rows={rows} fallbackAnswer={editorAnswer} canEdit={canEdit} now={now} />
       </>
     );
   } else {
@@ -74,7 +76,7 @@ export default async function KnowledgeBasePage({ searchParams }: PageProps<"/kb
     const rows = params.q ? all.filter((s) => s.name.toLowerCase().includes(params.q.toLowerCase())) : all;
     shown = rows.length;
     total = counts.sources;
-    content = <SourcesList rows={rows} filtered={Boolean(params.q)} canEdit={canEdit} />;
+    content = <SourcesList rows={rows} filtered={Boolean(params.q)} canEdit={canEdit} now={now} />;
   }
 
   return (

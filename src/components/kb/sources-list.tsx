@@ -27,7 +27,7 @@ const STATUS_LABEL: Record<JobStatus, string> = { queued: "Queued", running: "Re
  * document is queued or being read the list re-fetches every 2 s — the
  * server render is the poll, like the upload step's document list.
  */
-export function SourcesList({ rows, filtered, canEdit }: { rows: KbSourceRow[]; filtered: boolean; canEdit: boolean }) {
+export function SourcesList({ rows, filtered, canEdit, now }: { rows: KbSourceRow[]; filtered: boolean; canEdit: boolean; now: Date }) {
   const router = useRouter();
   const [retrying, setRetrying] = useState<string | null>(null);
   const busy = rows.some((s) => s.status === "queued" || s.status === "running");
@@ -62,7 +62,6 @@ export function SourcesList({ rows, filtered, canEdit }: { rows: KbSourceRow[]; 
     );
   }
 
-  const now = new Date();
   return (
     <div className="p-6">
       <div className="overflow-hidden rounded-lg border bg-card">

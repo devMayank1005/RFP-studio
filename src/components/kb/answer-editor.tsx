@@ -46,7 +46,7 @@ function draftFrom(a: ApprovedAnswerRow): Draft {
 }
 
 /** The sheet for one promoted answer: read it, correct it, or remove it. Same URL contract as the entry editor. */
-export function AnswerEditor({ rows, fallbackAnswer, canEdit }: { rows: ApprovedAnswerRow[]; fallbackAnswer: ApprovedAnswerRow | null; canEdit: boolean }) {
+export function AnswerEditor({ rows, fallbackAnswer, canEdit, now }: { rows: ApprovedAnswerRow[]; fallbackAnswer: ApprovedAnswerRow | null; canEdit: boolean; now: Date }) {
   const [params, setParams] = useQueryStates(kbParsers, { shallow: true, history: "replace" });
   const answer = params.entry ? (rows.find((r) => r.id === params.entry) ?? (fallbackAnswer?.id === params.entry ? fallbackAnswer : null)) : null;
   const close = () => void setParams({ entry: "" });
@@ -54,13 +54,13 @@ export function AnswerEditor({ rows, fallbackAnswer, canEdit }: { rows: Approved
   return (
     <Sheet open={answer !== null} onOpenChange={(o) => !o && close()}>
       <SheetContent side="right" className="w-full gap-0 p-0 data-[side=right]:sm:max-w-xl">
-        {answer && <AnswerForm key={answer.id} answer={answer} canEdit={canEdit} onClose={close} />}
+        {answer && <AnswerForm key={answer.id} answer={answer} canEdit={canEdit} now={now} onClose={close} />}
       </SheetContent>
     </Sheet>
   );
 }
 
-function AnswerForm({ answer, canEdit, onClose }: { answer: ApprovedAnswerRow; canEdit: boolean; onClose: () => void }) {
+function AnswerForm({ answer, canEdit, now, onClose }: { answer: ApprovedAnswerRow; canEdit: boolean; now: Date; onClose: () => void }) {
   const router = useRouter();
   const [draft, setDraft] = useState<Draft>(() => draftFrom(answer));
   const [errors, setErrors] = useState<Record<string, string[]>>({});
@@ -110,7 +110,7 @@ function AnswerForm({ answer, canEdit, onClose }: { answer: ApprovedAnswerRow; c
         <SheetDescription className="text-2xs">
           <span className="flex flex-wrap items-center gap-1.5">
             <span className="num">Reused {answer.reuseCount} {answer.reuseCount === 1 ? "time" : "times"}</span>
-            {answer.lastUsedAt ? <> · last {timeAgo(new Date(answer.lastUsedAt))}</> : null}
+            {answer.lastUsedAt ? <> · last {timeAgo(new Date(answer.lastUsedAt), now)}</> : null}
             {answer.embedded ? <Chip tone="teal">Embedded</Chip> : <Chip tone="amber">Not embedded</Chip>}
           </span>
           {answer.originRfpId && answer.originRfpTitle && (
