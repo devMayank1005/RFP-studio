@@ -57,3 +57,32 @@ export function AppLockup({ className, compact = false }: { className?: string; 
     </div>
   );
 }
+
+/**
+ * Official Kognoz Brand Logo (direct from kognozconsulting.com, 3890x642).
+ * Full-width wordmark including K-O-G-N-O-Z and brand rays.
+ */
+export function KognozOfficialLogo({
+  className,
+  width = 165,
+  priority = true,
+}: {
+  className?: string;
+  width?: number;
+  priority?: boolean;
+}) {
+  const height = Math.round(width * (642 / 3890));
+  return (
+    <Image
+      src="/brand/kognoz-brand-official-logo.png"
+      alt="Kognoz Consulting & Research"
+      width={width}
+      height={height}
+      priority={priority}
+      unoptimized
+      className={cn("select-none object-contain shrink-0", className)}
+      style={{ width, height }}
+    />
+  );
+}
+
