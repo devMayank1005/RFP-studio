@@ -88,7 +88,7 @@ prompts/         versioned system prompts and the default voice guide
 src/inngest/     parse-document → extract-questions → draft-responses (durable per-question steps)
 src/app/actions/ server actions: rfps, documents, questions, responses, review
 src/db/          Drizzle schema, queries, jobs, audit, seed
-src/components/  shell, chips, dashboard, wizard, workspace
+src/components/  shell, chips, dashboard, wizard, workspace, kb (knowledge-base screen)
 ```
 
 Flow: **New RFP** (client) → **Upload** (private Blob, parse job) → **Questions** (extraction job:
@@ -97,13 +97,29 @@ vendor's earlier answers) → **Workspace** (draft with Claude, review with J/K/
 instruction, every revision and citation kept; **Add to KB** turns an approved answer into a reusable,
 client-neutral passage future drafts retrieve).
 
+**CHRO questions** (`/rfps/[id]/chro`): once most answers are approved (80 % is the guide, not a gate), Opus
+proposes 12–16 discovery questions across six themes from the approved answers and the gaps (partial,
+not supported, open points). Reviewers keep, drop, edit and reorder them (`J/K`, `A`, `X`, `E`, `⌥↑↓`) or add
+their own; kept questions survive regeneration. `pnpm exec tsx scripts/chro-preview.ts <rfpId>` prints a set
+without writing, for prompt tuning.
+
+**Settings** (`/settings`): team roles (admins only; the last admin cannot be demoted), the brand template
+with a live preview (colours drive the chrome through `<BrandStyle/>`; chip tints stay fixed for contrast;
+dark mode keeps its own primary), and the voice guide that opens every draft's system prompt.
+
+**Knowledge base** (`/kb`): four tabs — Darwinbox capabilities by module, Kognoz services, approved answers
+with reuse counts, and sources. Entries are edited in a side sheet (`N` new, `J/K` move, `Enter` open, `/` search)
+and re-embedded when their text changes; they are deactivated rather than deleted so past citations still
+resolve. "Ingest a document" uploads a PDF/DOCX to private Blob and runs the `ingest-kb-source` Inngest job,
+whose progress lives on the `kb_sources` row (migration 0003).
+
 ## Scripts
 
 ```
 pnpm dev · build · lint · typecheck · test · test:e2e
 pnpm db:generate · db:migrate · db:push · db:studio · db:seed · db:ping · db:check-auth
 pnpm kb:seed                                    embed KB entries / approved answers missing a vector
-pnpm kb:ingest <file> [--dry-run]               PDF/DOCX product doc → KB entries (idempotent per file)
+pnpm kb:ingest <file> [--dry-run]               PDF/DOCX product doc → KB entries (same as the Sources tab's "Ingest a document")
 pnpm exec tsx scripts/extract-one.ts <file>     run extraction on a file and print what it found
 pnpm exec tsx scripts/simulate-upload.ts <rfpId> <file> [kind]   attach a file without the browser
 pnpm exec tsx scripts/make-fixtures.ts          regenerate the synthetic fixtures
