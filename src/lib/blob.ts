@@ -50,3 +50,8 @@ export async function getJson<T>(url: string): Promise<T> {
 export async function deletePrivate(urls: string[]) {
   if (urls.length) await del(urls);
 }
+
+/** Where a built export lives: `rfps/{rfpId}/exports/{file}` (private, like everything else here). */
+export function rfpExportPath(rfpId: string, fileName: string): string {
+  return `rfps/${rfpId}/exports/${safeName(fileName)}`;
+}

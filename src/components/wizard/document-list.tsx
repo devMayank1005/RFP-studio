@@ -12,13 +12,11 @@ import { Spinner } from "@/components/ui/spinner";
 import type { DocumentRow } from "@/db/queries/documents";
 import { DOCUMENT_KIND_LABEL, type ParseStatus } from "@/domain/enums";
 import { isStaleQueuedJob } from "@/domain/jobs";
+import { formatBytes } from "@/domain/format";
 
 const PARSE_TONE: Record<ParseStatus, ChipTone> = { pending: "neutral", parsing: "teal", parsed: "green", failed: "red" };
 const PARSE_LABEL: Record<ParseStatus, string> = { pending: "Queued", parsing: "Parsing", parsed: "Parsed", failed: "Failed" };
 
-function formatBytes(n: number): string {
-  return n < 1024 * 1024 ? `${(n / 1024).toFixed(0)} KB` : `${(n / (1024 * 1024)).toFixed(1)} MB`;
-}
 
 /**
  * The uploaded files with live parse status. While any document is still

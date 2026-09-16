@@ -63,6 +63,17 @@ export const exports = pgTable(
       onDelete: "set null",
     }),
     fileUrl: text("file_url"),
+    /** Lifecycle of the build; reuses job_status like kb_sources does. */
+    status: jobStatusEnum("status").notNull().default("queued"),
+    jobId: uuid("job_id").references(() => generationJobs.id, { onDelete: "set null" }),
+    fileName: text("file_name"),
+    sizeBytes: integer("size_bytes"),
+    error: text("error"),
+    /** What was asked for: { approvedOnly?, shape? } — see domain/export ExportOptions. */
+    options: jsonb("options").$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
+    /** The executive summary written for a Word build, flattened, kept for preview. */
+    summary: text("summary"),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
     createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },

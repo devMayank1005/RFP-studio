@@ -15,6 +15,8 @@ import { readSecret } from "@/lib/env";
 export const EXTRACT_MODEL = "claude-sonnet-5";
 export const DRAFT_MODEL = "claude-sonnet-5";
 export const BRIEF_MODEL = "claude-opus-5";
+/** The Word export's executive summary: judgement over approved answers, but not Opus-grade. */
+export const SUMMARY_MODEL = "claude-sonnet-5";
 
 /**
  * The SDK reads ANTHROPIC_API_KEY implicitly and puts it straight into an HTTP

@@ -13,10 +13,8 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { KB_ENTRY_TYPES, KB_ENTRY_TYPE_LABEL, KB_SOURCE_KINDS, KB_SOURCE_KIND_LABEL, type KbEntryType, type KbSourceKind } from "@/domain/enums";
+import { formatBytes } from "@/domain/format";
 
-function formatBytes(n: number): string {
-  return n < 1024 * 1024 ? `${(n / 1024).toFixed(0)} KB` : `${(n / (1024 * 1024)).toFixed(1)} MB`;
-}
 
 /** Pick a PDF or DOCX, say what it is, and hand it to the ingest job. */
 export function IngestDialog({ variant = "default" }: { variant?: "default" | "outline" }) {

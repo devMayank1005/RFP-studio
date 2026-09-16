@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Spinner } from "@/components/ui/spinner";
 import { DOCUMENT_KINDS, DOCUMENT_KIND_LABEL, type DocumentKind } from "@/domain/enums";
 import { cn } from "@/lib/utils";
+import { formatBytes } from "@/domain/format";
 
 interface Pending {
   file: File;
@@ -27,11 +28,6 @@ function guessKind(name: string): DocumentKind {
   return "rfp_main";
 }
 
-function formatBytes(n: number): string {
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
-  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
-}
 
 function FileIcon({ name }: { name: string }) {
   return /\.xls/i.test(name) ? <FileSpreadsheet className="size-4 text-meaning-green-text" /> : <FileText className="size-4 text-brand-blue dark:text-sidebar-primary" />;

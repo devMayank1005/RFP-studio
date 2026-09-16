@@ -1,7 +1,8 @@
 import { Inngest, eventType } from "inngest";
 import { z } from "zod";
 
-import { KB_ENTRY_TYPES } from "@/domain/enums";
+import { EXPORT_FORMATS, KB_ENTRY_TYPES } from "@/domain/enums";
+import { EXPORT_SHAPES } from "@/domain/export";
 import { jobRunnerConfigMessage } from "@/domain/jobs";
 import { readEnv, readSecret } from "@/lib/env";
 
@@ -43,6 +44,16 @@ export const kbIngestRequested = eventType("kb/ingest.requested", {
     product: z.string(),
     entryType: z.enum(KB_ENTRY_TYPES),
     actorId: z.string(),
+  }),
+});
+export const exportRequested = eventType("rfp/export.requested", {
+  schema: z.object({
+    rfpId: z.string(),
+    exportId: z.string(),
+    jobId: z.string(),
+    format: z.enum(EXPORT_FORMATS),
+    actorId: z.string(),
+    options: z.object({ approvedOnly: z.boolean().optional(), shape: z.enum(EXPORT_SHAPES).optional() }).optional(),
   }),
 });
 
