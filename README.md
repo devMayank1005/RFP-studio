@@ -97,6 +97,12 @@ vendor's earlier answers) → **Workspace** (draft with Claude, review with J/K/
 instruction, every revision and citation kept; **Add to KB** turns an approved answer into a reusable,
 client-neutral passage future drafts retrieve).
 
+**CHRO questions** (`/rfps/[id]/chro`): once most answers are approved (80 % is the guide, not a gate), Opus
+proposes 12–16 discovery questions across six themes from the approved answers and the gaps (partial,
+not supported, open points). Reviewers keep, drop, edit and reorder them (`J/K`, `A`, `X`, `E`, `⌥↑↓`) or add
+their own; kept questions survive regeneration. `pnpm exec tsx scripts/chro-preview.ts <rfpId>` prints a set
+without writing, for prompt tuning.
+
 **Knowledge base** (`/kb`): four tabs — Darwinbox capabilities by module, Kognoz services, approved answers
 with reuse counts, and sources. Entries are edited in a side sheet (`N` new, `J/K` move, `Enter` open, `/` search)
 and re-embedded when their text changes; they are deactivated rather than deleted so past citations still

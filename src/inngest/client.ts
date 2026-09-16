@@ -27,6 +27,11 @@ export const draftRequested = eventType("rfp/draft.requested", {
   }),
 });
 
+/** The CHRO discovery agenda for one RFP. replace_suggested keeps kept rows; append adds to whatever is there. */
+export const chroRequested = eventType("rfp/chro.requested", {
+  schema: z.object({ rfpId: z.string(), jobId: z.string(), actorId: z.string(), mode: z.enum(["replace_suggested", "append"]) }),
+});
+
 /** A document uploaded from the Knowledge base screen, to be read into entries. */
 export const kbIngestRequested = eventType("kb/ingest.requested", {
   schema: z.object({
