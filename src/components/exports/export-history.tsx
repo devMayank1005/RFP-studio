@@ -29,6 +29,7 @@ import { EXPORT_FORMAT_META } from "@/domain/export";
 import { formatBytes } from "@/domain/format";
 import { isStaleQueuedJob } from "@/domain/jobs";
 
+// Green is reserved for approved / fully compliant / success — a finished build is the third.
 const STATUS_TONE: Record<JobStatus, ChipTone> = { queued: "neutral", running: "teal", done: "green", failed: "red", cancelled: "neutral" };
 const STATUS_LABEL: Record<JobStatus, string> = { queued: "Queued", running: "Building", done: "Ready", failed: "Failed", cancelled: "Cancelled" };
 const ICON: Record<ExportFormat, typeof FileSpreadsheet> = { xlsx: FileSpreadsheet, docx: FileText, pptx: Presentation };

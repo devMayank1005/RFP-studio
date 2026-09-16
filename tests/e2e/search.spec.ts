@@ -69,6 +69,9 @@ test.describe("Command palette", () => {
     await hit.click();
     await expect(page).toHaveURL(/\/workspace\?row=[0-9a-f-]+/);
     await expect(page.locator('[role="row"][tabindex="0"]').first().locator('[role="gridcell"]').nth(1)).toHaveText("A.1", { timeout: 15_000 });
+    // The deep link survives the workspace's own URL sync: still there a moment later.
+    await page.waitForTimeout(1_500);
+    await expect(page).toHaveURL(/\/workspace\?row=[0-9a-f-]+/);
   });
 
   test("says when nothing matches, and typing in it never drives the grid", async ({ page }) => {

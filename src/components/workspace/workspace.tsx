@@ -66,6 +66,8 @@ export function Workspace({ rfpId, initial, role }: { rfpId: string; initial: Wo
   // The store outlives the page: never carry this RFP's row into the next one.
   useEffect(() => () => setActive(null), [setActive]);
   useEffect(() => {
+    // A deep link the effect above is about to apply must not be cleared by this first pass.
+    if (activeId === null && params.row && rows.some((r) => r.questionId === params.row)) return;
     if ((activeId ?? "") !== params.row) void setParams({ row: activeId ?? "" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId]);

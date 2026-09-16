@@ -1,6 +1,7 @@
 "use client";
 
 import { FileSpreadsheet, FileText, Presentation } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
@@ -42,9 +43,10 @@ export function ExportsPanel({
   canFill: boolean;
   now: Date;
 }) {
+  const router = useRouter();
   const canBuild = can(role, "export.create");
   const [approvedOnly, setApprovedOnly] = useState(false);
-  const [shape, setShape] = useState<ExportShape>(canFill ? "fill" : "fresh");
+  const [shape, setShape] = useState<ExportShape>("fresh");
   const [pending, setPending] = useState<ExportFormat | null>(null);
   const [isPending, startTransition] = useTransition();
   const [jobs, setJobs] = useState<Partial<Record<ExportFormat, string>>>(() => {
@@ -62,6 +64,8 @@ export function ExportsPanel({
       setPending(null);
       if (!result.ok) return void toast.error(result.error);
       setJobs((j) => ({ ...j, [format]: result.data.jobId }));
+      // The queued row belongs in the history straight away; the settle refresh handles completion.
+      router.refresh();
     });
   }
 
@@ -73,6 +77,9 @@ export function ExportsPanel({
     });
 
   const roleHint = canBuild ? null : `Your role (${ROLE_LABEL[role]}) cannot create exports.`;
+  const noQuestions = readiness.total === 0;
+  const buildHint = roleHint ?? (noQuestions ? "Add and confirm questions first." : null);
+  const canBuildNow = canBuild && !noQuestions;
   const pct = readiness.total ? Math.round((readiness.approved / readiness.total) * 100) : 0;
 
   return (
@@ -122,8 +129,8 @@ export function ExportsPanel({
           description="The client's own columns with ours appended — or their file, filled in."
           icon={FileSpreadsheet}
           buildLabel="Build Excel"
-          canBuild={canBuild}
-          disabledHint={roleHint}
+          canBuild={canBuildNow}
+          disabledHint={buildHint}
           pending={isPending && pending === "xlsx"}
           activeJobId={jobs.xlsx ?? null}
           progressTitle="Building the Excel export"
@@ -139,6 +146,9 @@ export function ExportsPanel({
               Fill the client&apos;s file
             </ToggleGroupItem>
           </ToggleGroup>
+          <p className="mt-2 text-2xs text-muted-foreground">
+            {shape === "fill" ? "Their file, with answers written into their own columns; unapproved answers are tinted amber." : "A new workbook: their columns first, then ours."}
+          </p>
         </FormatCard>
         <FormatCard
           eyebrow="Word"
@@ -146,8 +156,8 @@ export function ExportsPanel({
           description="Executive summary, every section with its answers and sources, and the CHRO appendix — in the brand template."
           icon={FileText}
           buildLabel="Build Word"
-          canBuild={canBuild}
-          disabledHint={roleHint ?? engineError}
+          canBuild={canBuildNow}
+          disabledHint={buildHint ?? engineError}
           pending={isPending && pending === "docx"}
           activeJobId={jobs.docx ?? null}
           progressTitle="Building the Word export"

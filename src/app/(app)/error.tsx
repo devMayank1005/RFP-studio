@@ -23,7 +23,7 @@ export default function AppError({ error, reset }: { error: Error & { digest?: s
       </div>
       <div className="space-y-1.5">
         <h1 className="font-heading text-xl font-semibold">Something went wrong</h1>
-        <p className="max-w-md text-ui text-muted-foreground">{error.message || "An unexpected error stopped this screen."}</p>
+        <p className="max-w-md text-ui text-muted-foreground">{process.env.NODE_ENV !== "production" && error.message ? error.message : "An unexpected error stopped this screen. Try again, or head back to the pipeline."}</p>
         {error.digest ? <p className="num text-2xs text-faint-ink">Reference {error.digest}</p> : null}
       </div>
       <div className="flex items-center gap-2">

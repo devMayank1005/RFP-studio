@@ -79,6 +79,10 @@ describe("renderXlsxFill", () => {
     expect(ws.getCell(1, 5).value).toBe("Kognoz remarks");
     expect(String(ws.getCell(2, 3).value)).toContain("SAML 2.0");
     expect(ws.getCell(2, 4).value).toBe("Fully");
-    expect((ws.getCell(1, 3).fill as ExcelJS.FillPattern).fgColor?.argb).toBe("FF2B9E85");
+    // Appended headers copy the client's header style (bold, no fill) instead of being branded.
+    expect(ws.getCell(1, 3).font?.bold).toBe(true);
+    expect((ws.getCell(1, 3).fill as ExcelJS.FillPattern | undefined)?.fgColor?.argb).toBeUndefined();
+    const notes = (await load(buffer)).getWorksheet(NOTES_SHEET)!;
+    expect(notes.getSheetValues().flat().map(String).join("\n")).toContain("Kognoz response (Reqs)");
   });
 });

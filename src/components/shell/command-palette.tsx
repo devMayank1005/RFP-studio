@@ -3,7 +3,7 @@
 import { FileText, Moon, Plus, Sun, Zap, type LucideIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
 import { Chip, RfpStatusChip } from "@/components/chips/chips";
 import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandShortcut } from "@/components/ui/command";
@@ -44,13 +44,18 @@ export function CommandPaletteProvider({ children }: { children: React.ReactNode
   const router = useRouter();
   const { resolvedTheme, setTheme } = useTheme();
   const { results, searching } = useSearch(q, isOpen);
+  const isOpenRef = useRef(isOpen);
+  useEffect(() => {
+    isOpenRef.current = isOpen;
+  }, [isOpen]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
-        // Close if open; otherwise open unless another dialog already has the screen.
-        setIsOpen((open) => (open ? false : dialogOpen() ? open : true));
+        // Close if open; otherwise open unless another dialog already has the screen. Read the DOM here, not in an updater.
+        if (isOpenRef.current) setIsOpen(false);
+        else if (!dialogOpen()) setIsOpen(true);
       }
     }
     document.addEventListener("keydown", onKey);
@@ -85,8 +90,8 @@ export function CommandPaletteProvider({ children }: { children: React.ReactNode
   const visibleActions = filterStatic(actions, q);
 
   // cmdk only auto-selects when nothing is selected. Results arrive after the
-  // keystroke that cleared the previous selection's item, so keep the selection
-  // controlled and land it on the first row whenever the list changes under it.
+  // keystroke that removed the previously selected item, so keep the selection
+  // controlled and move it to the first row only when its item is gone.
   const [selected, setSelected] = useState("");
   const itemValues = [...results.rfps.map(hitValue), ...results.questions.map(hitValue), ...nav.map((n) => `nav:${n.href}`), ...visibleActions.map((a) => `action:${a.id}`)];
   const itemKey = itemValues.join("|");
@@ -117,8 +122,8 @@ export function CommandPaletteProvider({ children }: { children: React.ReactNode
               {results.rfps.map((hit) => (
                 <CommandItem key={hit.id} value={hitValue(hit)} onSelect={() => run(() => router.push(hitHref(hit)))}>
                   <FileText />
-                  <span className="min-w-0 truncate text-ui">{hit.title}</span>
-                  <span className="shrink-0 truncate text-2xs text-muted-foreground">{hit.clientName}</span>
+                  <span className="min-w-0 flex-1 truncate text-ui">{hit.title}</span>
+                  <span className="max-w-[40%] truncate text-2xs text-muted-foreground">{hit.clientName}</span>
                   {hit.rfpKind === "quick" && <Chip tone="teal">Quick</Chip>}
                   <CommandShortcut className="tracking-normal">
                     <RfpStatusChip status={hit.status} />
@@ -133,7 +138,7 @@ export function CommandPaletteProvider({ children }: { children: React.ReactNode
                 <CommandItem key={hit.id} value={hitValue(hit)} onSelect={() => run(() => router.push(hitHref(hit)))}>
                   <span className="num shrink-0 text-2xs text-muted-foreground">{hit.refNo}</span>
                   <span className="min-w-0 truncate text-ui">{hit.text}</span>
-                  <CommandShortcut className="max-w-[30%] truncate tracking-normal">{hit.rfpTitle}</CommandShortcut>
+                  <CommandShortcut className="max-w-[35%] truncate tracking-normal">{hit.rfpTitle}</CommandShortcut>
                 </CommandItem>
               ))}
             </CommandGroup>

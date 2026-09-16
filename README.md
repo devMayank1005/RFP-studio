@@ -137,6 +137,10 @@ and the page says how many there are before you build; tick "Only approved answe
 Builds run as the `build-export` Inngest job, land in private Blob and download through a session-gated route;
 the history keeps every file with who built it. The deck is a later milestone.
 
+Opt-in end-to-end cases: `E2E_WITH_MODEL=1` runs the cases that call Claude (a Word export, a Quick Q&A
+session drafted to the end); `E2E_FILL_RFP_ID=<rfp id>` runs the filled-workbook export against an RFP whose
+original .xlsx questionnaire is parsed. Both need `pnpm inngest:dev` alongside `pnpm dev --port 3001`.
+
 ## Scripts
 
 ```

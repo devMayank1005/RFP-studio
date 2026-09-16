@@ -2,7 +2,6 @@ import ExcelJS from "exceljs";
 
 import { APPENDED_HEADER, docxFont, fillCellValues, fillColumnPlan, matchQuestionsToRows, type ExportBrand, type ExportModel, type FillTarget, type MatchResult } from "@/domain/export";
 
-import { inkArgb } from "./xlsx";
 
 /**
  * The client's own workbook, filled in: every question we could place is
@@ -65,6 +64,7 @@ export async function renderXlsxFill(model: ExportModel, brand: ExportBrand, ori
 
   let matched = 0;
   const sheetsTouched: string[] = [];
+  const appended: string[] = [];
   for (const [sheetName, rows] of rowsBySheet) {
     const ws = wb.getWorksheet(sheetName);
     const parsed = model.sheets.find((s) => s.name === sheetName);
@@ -81,17 +81,19 @@ export async function renderXlsxFill(model: ExportModel, brand: ExportBrand, ori
       remarks: plan.remarks ? columnFor(plan.remarks, ws, columns) : null,
     };
     const questionsCol = plan.questions ? columnFor(plan.questions, ws, columns) : null;
-    let next = Math.max(ws.columnCount, ...[...columns.values()]) + 1;
+    const lastHeaderCol = Math.max(ws.columnCount, ...[...columns.values()]);
+    const headerStyle = ws.getCell(parsed.headerRow, lastHeaderCol).style;
+    let next = lastHeaderCol + 1;
     for (const field of ["response", "compliance", "remarks"] as const) {
       if (target[field]) continue;
       const col = next++;
       const header = ws.getCell(parsed.headerRow, col);
       header.value = APPENDED_HEADER[field];
-      header.fill = { type: "pattern", pattern: "solid", fgColor: { argb: inkArgb("accent", brand) } };
-      header.font = { name: font, size: 10, bold: true, color: { argb: "FFFFFFFF" } };
-      header.alignment = { vertical: "middle", wrapText: true };
+      // Match the client's own header row rather than branding one cell of it.
+      header.style = { ...headerStyle };
       ws.getColumn(col).width = APPENDED_WIDTH[field];
       target[field] = col;
+      appended.push(`${APPENDED_HEADER[field]} (${sheetName})`);
     }
 
     for (const [rowNumber, ids] of [...rows.entries()].sort((a, b) => a[0] - b[0])) {
@@ -127,6 +129,7 @@ export async function renderXlsxFill(model: ExportModel, brand: ExportBrand, ori
   notes.addRow({ a: "Generated", b: model.generatedOn });
   notes.addRow({ a: "Written back", b: `${matched} of ${model.questions.length} questions` });
   notes.addRow({ a: "Answers", b: model.options.approvedOnly ? "Approved answers only" : `All answers; ${model.readiness.unapproved} not yet approved are tinted amber with a note` });
+  if (appended.length) notes.addRow({ a: "Added columns", b: appended.join(", ") });
   notes.addRow({});
   if (unmatched.length) {
     const head = notes.addRow({ a: "Not written back", b: "Question", c: "Why" });

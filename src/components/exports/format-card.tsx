@@ -50,8 +50,8 @@ export function FormatCard({
   children?: ReactNode;
 }) {
   const router = useRouter();
-  const disabled = later || !canBuild || pending || !!activeJobId;
-  const hint = later ? "Arrives in a later milestone." : disabledHint;
+  const disabled = !canBuild || pending || !!activeJobId;
+  const hint = disabledHint;
 
   return (
     <Card size="sm" className="flex flex-col">
@@ -68,13 +68,16 @@ export function FormatCard({
       </CardHeader>
       {children ? <CardContent>{children}</CardContent> : null}
       <CardFooter className="mt-auto flex flex-col items-stretch gap-2">
-        <span title={disabled && hint ? hint : undefined} className="inline-flex">
+        {/* A format that is not available yet says so once, with the chip; no button to explain. */}
+        {later ? (
+          <p className="text-2xs text-muted-foreground">Arrives in a later milestone.</p>
+        ) : (
           <Button size="sm" className="w-full" onClick={onBuild} disabled={disabled} aria-label={buildLabel}>
             {pending ? <Spinner className="size-3.5" /> : <Icon />}
             {buildLabel}
           </Button>
-        </span>
-        {disabled && hint && !activeJobId ? <p className="text-2xs text-muted-foreground">{hint}</p> : null}
+        )}
+        {!later && disabled && hint && !activeJobId ? <p className="text-2xs text-muted-foreground">{hint}</p> : null}
         {activeJobId ? (
           <JobProgress
             jobId={activeJobId}

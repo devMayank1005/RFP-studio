@@ -2,6 +2,7 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 
 import { AppSidebar, type ShellUser } from "./app-sidebar";
 import { CommandPaletteProvider } from "./command-palette";
+import { GotoChords } from "./goto-chords";
 import { Topbar } from "./topbar";
 
 /**
@@ -15,6 +16,7 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
       style={{ "--sidebar-width": "14rem", "--sidebar-width-icon": "3.5rem" } as React.CSSProperties}
     >
       <CommandPaletteProvider>
+        <GotoChords />
         <AppSidebar user={user} />
         {/* The inset is exactly one viewport tall: pages scroll inside it, and the
             workspace grid gets a bounded height so its virtualiser owns the scroll. */}
