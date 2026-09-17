@@ -93,12 +93,13 @@ describe("questionsFromLines", () => {
 
 describe("quickCounts / quickPermissions", () => {
   it("counts drafted, approved and promoted rows", () => {
-    expect(quickCounts([{ status: "approved", kbAnswerId: "k" }, { status: "ai_draft", kbAnswerId: null }, { status: null, kbAnswerId: null }])).toEqual({ total: 3, drafted: 2, approved: 1, inKb: 1 });
+    expect(quickCounts([{ status: "approved", kbAnswerId: "k" }, { status: "ai_draft", kbAnswerId: null }, { status: null, kbAnswerId: null }])).toEqual({ total: 3, drafted: 2, undrafted: 1, approved: 1, inKb: 1 });
   });
 
   it("mirrors the role matrix", () => {
     expect(quickPermissions("sales")).toMatchObject({ create: true, draft: true, approve: false, promote: false });
-    expect(quickPermissions("reviewer")).toMatchObject({ create: false, approve: true, promote: true });
+    expect(quickPermissions("reviewer")).toMatchObject({ create: false, approve: true, promote: true, remove: false });
+    expect(quickPermissions("consultant").remove).toBe(true);
     expect(quickPermissions("consultant")).toMatchObject({ create: true, approve: true, promote: true, edit: true });
   });
 });
@@ -123,8 +124,8 @@ describe("quickStage", () => {
     expect(quickStage({ intake: job("done", 3, 2), draft: job("failed", 1, 0), questionCount: 3, now })).toMatchObject({ show: "draft", failed: true });
   });
 
-  it("keeps polling briefly after intake finishes, until the draft job appears", () => {
-    expect(quickStage({ intake: job("done", 1, 0), draft: null, questionCount: 3, now })).toMatchObject({ show: null, active: true });
+  it("is idle once intake is done and nothing is drafting — the page offers what to draft", () => {
+    expect(quickStage({ intake: job("done", 1, 0), draft: null, questionCount: 3, now })).toEqual({ show: null, failed: false, stale: false, active: false });
     expect(quickStage({ intake: job("done", 10, 5), draft: null, questionCount: 3, now })).toMatchObject({ show: null, active: false });
   });
 });

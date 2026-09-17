@@ -48,7 +48,7 @@ export async function draftRfp(rfpId: string, questionIds?: string[]): Promise<A
     await sendJobEvent(draftRequested.create({ rfpId, workspaceId: session.workspaceId, jobId, questionIds: ids, actorId: session.userId }), { jobId });
     if (rfp.status === "questions_ready") await db.update(rfps).set({ status: "drafting" }).where(eq(rfps.id, rfpId));
     await writeAudit(db, { workspaceId: session.workspaceId, actorId: session.userId, entity: "rfp", entityId: rfpId, action: "draft.started", diff: { jobId, count: ids.length } });
-    revalidatePath(`/rfps/${rfpId}`, "layout");
+    revalidateRfp(rfpId, rfp.kind);
     return { jobId, count: ids.length };
   });
 }
@@ -69,6 +69,44 @@ export async function regenerateResponse(rfpId: string, questionId: string, inst
     if (!jobId) throw new ActionError("This answer is already being regenerated — give it a moment.");
     await sendJobEvent(draftRequested.create({ rfpId, workspaceId: session.workspaceId, jobId, questionIds: [q.id], instruction: text || undefined, actorId: session.userId }), { jobId });
     await writeAudit(db, { workspaceId: session.workspaceId, actorId: session.userId, entity: "rfp_question", entityId: q.id, action: "response.regenerate", diff: { instruction: text } });
+    revalidateRfp(rfpId, rfp.kind);
     return { jobId };
   });
+}
+
+/**
+ * Draft one question that has no response yet — Quick Q&A's "Draft this
+ * question". Its own dedupe key, so it never collides with a "draft all" run
+ * (which would skip a question already answered) or another card's draft.
+ */
+export async function draftQuestion(rfpId: string, questionId: string): Promise<ActionResult<{ jobId: string }>> {
+  return runAction(async () => {
+    const session = await requireCan("response.draft");
+    await requireBudget(session, "jobs:user");
+    const rfp = await requireRfp(session, rfpId);
+    if (!DRAFTABLE.has(rfp.status)) throw new ActionError("Confirm the question list before drafting.");
+    requireJobRunner();
+    const [q] = await db
+      .select({ id: rfpQuestions.id, responseId: responses.id })
+      .from(rfpQuestions)
+      .leftJoin(responses, eq(responses.questionId, rfpQuestions.id))
+      .where(and(eq(rfpQuestions.id, questionId), eq(rfpQuestions.rfpId, rfpId)))
+      .limit(1);
+    if (!q) throw new ActionError("Question not found.");
+    if (q.responseId) throw new ActionError("Already drafted — use Regenerate to redo it.");
+
+    const jobId = await createJob({ rfpId, jobType: "draft", dedupeKey: `draft:q:${q.id}`, payload: { questionIds: [q.id] }, createdBy: session.userId, progressTotal: 1 });
+    if (!jobId) throw new ActionError("This question is already being drafted — give it a moment.");
+    await sendJobEvent(draftRequested.create({ rfpId, workspaceId: session.workspaceId, jobId, questionIds: [q.id], actorId: session.userId }), { jobId });
+    if (rfp.status === "questions_ready") await db.update(rfps).set({ status: "drafting" }).where(eq(rfps.id, rfpId));
+    await writeAudit(db, { workspaceId: session.workspaceId, actorId: session.userId, entity: "rfp_question", entityId: q.id, action: "response.drafted", diff: { jobId } });
+    revalidateRfp(rfpId, rfp.kind);
+    return { jobId };
+  });
+}
+
+/** The RFP's pages, and the Quick Q&A session page when that is what the RFP is. */
+function revalidateRfp(rfpId: string, kind: string) {
+  revalidatePath(`/rfps/${rfpId}`, "layout");
+  if (kind === "quick") revalidatePath(`/quick/${rfpId}`);
 }

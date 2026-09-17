@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -9,7 +9,7 @@ import { writeAudit } from "@/db/audit";
 import { db } from "@/db/client";
 import { createJob, finishJob, latestJob } from "@/db/jobs";
 import { ensureQuickClient, ownedClientId } from "@/db/queries/quick";
-import { responses, rfpDocuments, rfpQuestions, rfps } from "@/db/schema";
+import { generationJobs, responses, rfpDocuments, rfpQuestions, rfps } from "@/db/schema";
 import { todayInKolkata } from "@/domain/dates";
 import { isStaleQueuedJob } from "@/domain/jobs";
 import { firstLine, pastedDocument, quickInputSchema, quickTitle } from "@/domain/quick";
@@ -28,8 +28,9 @@ import { approveResponses } from "./review";
 /**
  * Quick Q&A: a session is a lightweight RFP (kind = quick). Creating one
  * stores the paste or file, queues the intake job and lands on the session
- * page; the intake job hands off to the ordinary draft job. Review actions
- * are the workspace's; the one addition is approve-and-promote in one step.
+ * page; the intake job stops at the question list and the reviewer chooses
+ * what to draft. Review actions are the workspace's; the additions are
+ * approve-and-promote in one step and removing a question before drafting.
  */
 
 const MAX_BYTES = 20 * 1024 * 1024;
@@ -177,5 +178,39 @@ export async function approveAndPromote(rfpId: string, questionId: string): Prom
     const result = await promoteResponse(session, rfp, qid);
     revalidatePath(pagePath(rfp.id));
     return result;
+  });
+}
+
+/**
+ * Drop an extracted question before anything is spent on it. Only while it
+ * has no response and no draft in flight; the counters on the session follow
+ * through the database triggers.
+ */
+export async function removeQuickQuestion(rfpId: string, questionId: string): Promise<ActionResult<{ removed: string }>> {
+  return runAction(async () => {
+    const session = await requireCan("rfp.edit");
+    const rfp = await requireRfp(session, rfpId);
+    if (rfp.kind !== "quick") throw new ActionError("Not a Quick Q&A session.");
+    const id = z.string().uuid().parse(questionId);
+    const [q] = await db
+      .select({ id: rfpQuestions.id, responseId: responses.id })
+      .from(rfpQuestions)
+      .leftJoin(responses, eq(responses.questionId, rfpQuestions.id))
+      .where(and(eq(rfpQuestions.id, id), eq(rfpQuestions.rfpId, rfp.id)))
+      .limit(1);
+    if (!q) throw new ActionError("Question not found.");
+    if (q.responseId) throw new ActionError("This question already has an answer — open the workspace to delete it.");
+    const [live] = await db
+      .select({ id: generationJobs.id })
+      .from(generationJobs)
+      .where(and(eq(generationJobs.rfpId, rfp.id), eq(generationJobs.dedupeKey, `draft:q:${q.id}`), inArray(generationJobs.status, ["queued", "running"])))
+      .limit(1);
+    if (live) throw new ActionError("This question is being drafted — wait for it to finish.");
+    await db.transaction(async (tx) => {
+      await tx.delete(rfpQuestions).where(eq(rfpQuestions.id, q.id));
+      await writeAudit(tx, { workspaceId: session.workspaceId, actorId: session.userId, entity: "rfp", entityId: rfp.id, action: "questions.deleted", diff: { ids: [q.id], quick: true } });
+    });
+    revalidatePath(pagePath(rfp.id));
+    return { removed: q.id };
   });
 }

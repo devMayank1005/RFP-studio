@@ -2,21 +2,23 @@ import { eq } from "drizzle-orm";
 import { NonRetriableError } from "inngest";
 
 import { db } from "@/db/client";
-import { bumpJobProgress, createJob, finishJob, markJobRunning, setJobProgress } from "@/db/jobs";
-import { rfpDocuments, rfpQuestions, rfps } from "@/db/schema";
+import { bumpJobProgress, finishJob, markJobRunning, setJobProgress } from "@/db/jobs";
+import { rfpDocuments, rfps } from "@/db/schema";
 import type { ExtractedQuestion } from "@/domain/extraction";
 import { questionsFromLines } from "@/domain/quick";
 import { putJson, readPrivate, rfpParsedPath } from "@/lib/blob";
 import { parseDocument } from "@/lib/parsing";
 import { failJob } from "@/lib/jobs";
 
-import { draftRequested, inngest, quickRequested } from "./client";
+import { inngest, quickRequested } from "./client";
 import { countChunks, extractParsedDocument, persistExtractedQuestions } from "./extract-shared";
 import { loadParsed } from "./parse";
 
 /**
  * Quick Q&A intake: a paste (already stored as a parsed document) or an
- * uploaded file becomes questions, then the ordinary draft job takes over.
+ * uploaded file becomes questions. It stops there — the session page then
+ * offers "Draft all responses" or "Draft this question", so nothing is
+ * spent on a wrong extraction (the ordinary draft job does the drafting).
  * Parsing happens here, not in the action, so a 20 MB PDF never meets a
  * request timeout; every step returns small JSON — the document itself
  * stays in Blob and is re-read by URL.
@@ -41,7 +43,7 @@ export const quickIntake = inngest.createFunction(
     },
   },
   async ({ event, step, runId }) => {
-    const { rfpId, workspaceId, jobId, actorId, source, documentId, parsedTextUrl } = event.data;
+    const { rfpId, jobId, source, documentId, parsedTextUrl } = event.data;
 
     const read = await step.run("read", async (): Promise<{ parsedTextUrl: string; fileName: string }> => {
       await markJobRunning(jobId, runId);
@@ -100,15 +102,6 @@ export const quickIntake = inngest.createFunction(
       });
     });
 
-    const draft = await step.run("create-draft-job", async () => {
-      const ids = (await db.select({ id: rfpQuestions.id }).from(rfpQuestions).where(eq(rfpQuestions.rfpId, rfpId)).orderBy(rfpQuestions.sortOrder)).map((r) => r.id);
-      const draftJobId = await createJob({ rfpId, jobType: "draft", dedupeKey: "draft:all", payload: { questionIds: ids, quick: true }, createdBy: actorId, progressTotal: ids.length });
-      if (!draftJobId) throw new NonRetriableError("a draft job is already running for this session");
-      await db.update(rfps).set({ status: "drafting" }).where(eq(rfps.id, rfpId));
-      return { draftJobId, ids };
-    });
-    await step.sendEvent("send-draft", draftRequested.create({ rfpId, workspaceId, jobId: draft.draftJobId, questionIds: draft.ids, actorId }));
-
-    return { questions: count, draftJobId: draft.draftJobId };
+    return { questions: count };
   },
 );

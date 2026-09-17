@@ -107,7 +107,8 @@ export async function getJob(workspaceId: string, jobId: string, executor: Execu
 }
 
 /** The most recent job of a type for an RFP — what the setup screens show. */
-export async function latestJob(rfpId: string, jobType: JobType): Promise<JobView | null> {
+/** The newest job of a type on an RFP; `opts.dedupeKey` narrows it (e.g. "draft:all", so single-question drafts do not count). */
+export async function latestJob(rfpId: string, jobType: JobType, opts: { dedupeKey?: string } = {}): Promise<JobView | null> {
   if (!isUuid(rfpId)) return null;
   const [row] = await db
     .select({
@@ -124,7 +125,7 @@ export async function latestJob(rfpId: string, jobType: JobType): Promise<JobVie
       finishedAt: generationJobs.finishedAt,
     })
     .from(generationJobs)
-    .where(and(eq(generationJobs.rfpId, rfpId), eq(generationJobs.jobType, jobType)))
+    .where(and(eq(generationJobs.rfpId, rfpId), eq(generationJobs.jobType, jobType), ...(opts.dedupeKey ? [eq(generationJobs.dedupeKey, opts.dedupeKey)] : [])))
     .orderBy(desc(generationJobs.createdAt))
     .limit(1);
   return row ?? null;

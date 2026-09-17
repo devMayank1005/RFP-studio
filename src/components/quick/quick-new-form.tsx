@@ -112,7 +112,7 @@ export function QuickNewForm({ clients }: { clients: ClientOption[] }) {
         <div className="flex items-center justify-end">
           <Button type="submit" disabled={pending}>
             {pending ? <Spinner className="size-4" /> : <Sparkles />}
-            Draft responses
+            Extract questions
           </Button>
         </div>
       </FieldGroup>

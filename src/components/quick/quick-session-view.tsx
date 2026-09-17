@@ -21,9 +21,11 @@ import { quickCounts, quickPermissions, quickStage } from "@/domain/quick";
 import { QuickAnswerCard } from "./quick-answer-card";
 
 /**
- * One session: what was asked and for whom, the intake and drafting
- * progress (the page re-fetches every 2 s while either runs, so cards fill
- * in as each answer lands), then the answers.
+ * One session: what was asked and for whom, the intake progress (the page
+ * re-fetches every 2 s while a job runs, so cards fill in as each answer
+ * lands), then the questions. Nothing is drafted until someone asks: the
+ * band offers "Draft all responses", every undrafted card "Draft this
+ * question" or "Remove".
  */
 export function QuickSessionView({ session, rows, intake, draft, role, now }: { session: QuickSession; rows: QuickRow[]; intake: JobView | null; draft: JobView | null; role: Role; now: Date }) {
   const router = useRouter();
@@ -31,7 +33,8 @@ export function QuickSessionView({ session, rows, intake, draft, role, now }: { 
   const counts = quickCounts(rows);
   const stage = quickStage({ intake, draft, questionCount: rows.length, now });
   const [isPending, startTransition] = useTransition();
-  const [retryJobId, setRetryJobId] = useState<string | null>(null);
+  // A job this page just started, shown until the refresh brings the row.
+  const [startedJobId, setStartedJobId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!stage.active) return;
@@ -43,13 +46,24 @@ export function QuickSessionView({ session, rows, intake, draft, role, now }: { 
     startTransition(async () => {
       const result = stage.show === "intake" ? await retryQuickIntake(session.id) : await draftRfp(session.id);
       if (!result.ok) return void toast.error(result.error);
-      setRetryJobId(result.data.jobId);
+      setStartedJobId(result.data.jobId);
       router.refresh();
     });
   }
 
-  const undrafted = rows.filter((r) => r.status === null).length;
-  const canDraftMore = permissions.draft && !stage.active && undrafted > 0 && session.status !== "parsing";
+  function draftAll() {
+    startTransition(async () => {
+      const result = await draftRfp(session.id);
+      if (!result.ok) return void toast.error(result.error);
+      setStartedJobId(result.data.jobId);
+      router.refresh();
+    });
+  }
+
+  const idle = !stage.active && stage.show === null && session.status !== "parsing";
+  const offerDrafts = idle && counts.undrafted > 0 && !startedJobId;
+  // Cards hold still while a batch runs or a request is in flight.
+  const locked = stage.active || isPending || !!startedJobId;
 
   return (
     <div className="flex flex-col gap-5 p-6">
@@ -76,12 +90,6 @@ export function QuickSessionView({ session, rows, intake, draft, role, now }: { 
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          {canDraftMore && (
-            <Button size="sm" variant="outline" onClick={retry} disabled={isPending}>
-              {isPending ? <Spinner className="size-3.5" /> : <Zap />}
-              Draft {undrafted} undrafted
-            </Button>
-          )}
           <Button asChild size="sm" variant="outline">
             <Link href={`/rfps/${session.id}/workspace`}>
               <ExternalLink />
@@ -100,21 +108,24 @@ export function QuickSessionView({ session, rows, intake, draft, role, now }: { 
 
       {stage.show === "intake" && intake && (
         <JobProgress
-          jobId={retryJobId ?? intake.id}
+          jobId={startedJobId ?? intake.id}
           title={intake.status === "failed" ? "Reading the questions failed" : "Reading the questions"}
-          detail="Claude turns the paste or file into a question list, then drafting starts on its own."
+          detail="Claude turns the paste or file into a question list. Then you choose what to draft."
           onRetry={retry}
           className="p-4"
         />
       )}
       {stage.show === "draft" && draft && (
         <JobProgress
-          jobId={retryJobId ?? draft.id}
+          jobId={startedJobId ?? draft.id}
           title={draft.status === "failed" ? "Drafting stopped" : "Drafting responses"}
           detail="Every answer is drafted from the knowledge base with citations; cards fill in as they land."
           onRetry={retry}
           className="p-4"
         />
+      )}
+      {stage.show === null && startedJobId && (
+        <JobProgress jobId={startedJobId} title="Drafting responses" detail="Every answer is drafted from the knowledge base with citations; cards fill in as they land." onDone={() => setStartedJobId(null)} onRetry={() => setStartedJobId(null)} className="p-4" />
       )}
       {stage.stale && (
         <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-card px-4 py-3">
@@ -129,12 +140,30 @@ export function QuickSessionView({ session, rows, intake, draft, role, now }: { 
           )}
         </div>
       )}
-      {stage.show === null && stage.active && <p className="text-2xs text-muted-foreground">Questions are in — starting the drafts…</p>}
+
+      {offerDrafts && (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-card px-4 py-3" role="region" aria-label="What to draft">
+          <div className="min-w-0 flex-1">
+            <div className="text-ui font-medium">
+              <span className="num">{counts.undrafted}</span> {counts.drafted === 0 ? (counts.undrafted === 1 ? "question found" : "questions found") : counts.undrafted === 1 ? "question still undrafted" : "questions still undrafted"}
+            </div>
+            <p className="text-2xs text-muted-foreground">
+              {permissions.draft ? "Draft them all at once, or one at a time from each card below. Remove any that should not be answered." : "A consultant drafts them — you can review and approve once they land."}
+            </p>
+          </div>
+          {permissions.draft && (
+            <Button size="sm" onClick={draftAll} disabled={isPending}>
+              {isPending ? <Spinner className="size-3.5" /> : <Zap />}
+              Draft all responses
+            </Button>
+          )}
+        </div>
+      )}
 
       {rows.length ? (
         <div className="flex flex-col gap-3">
           {rows.map((row) => (
-            <QuickAnswerCard key={`${row.questionId}:${row.revisionId ?? "none"}:${row.status ?? "none"}:${row.kbAnswerId ?? ""}`} rfpId={session.id} row={row} permissions={permissions} now={now} />
+            <QuickAnswerCard key={`${row.questionId}:${row.revisionId ?? "none"}:${row.status ?? "none"}:${row.kbAnswerId ?? ""}`} rfpId={session.id} row={row} permissions={permissions} locked={locked} now={now} />
           ))}
         </div>
       ) : (

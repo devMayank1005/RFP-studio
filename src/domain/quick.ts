@@ -24,8 +24,6 @@ export const QUICK_TEXT_MAX = 50_000;
 export const QUICK_CONTEXT_MAX = 4_000;
 export const QUICK_PAGE_CHARS = 6_000;
 export const QUICK_TITLE_MAX = 80;
-/** How long after intake finishes the page keeps polling for the draft job to appear. */
-export const QUICK_HANDOFF_MS = 60_000;
 
 /** Form fields; the file itself is checked in the action. A paste needs real text, a document needs none. */
 export const quickInputSchema = z
@@ -144,10 +142,11 @@ export interface QuickCountable {
   kbAnswerId: string | null;
 }
 
-export function quickCounts(rows: readonly QuickCountable[]): { total: number; drafted: number; approved: number; inKb: number } {
+export function quickCounts(rows: readonly QuickCountable[]): { total: number; drafted: number; undrafted: number; approved: number; inKb: number } {
   return {
     total: rows.length,
     drafted: rows.filter((r) => r.status !== null).length,
+    undrafted: rows.filter((r) => r.status === null).length,
     approved: rows.filter((r) => r.status === "approved").length,
     inKb: rows.filter((r) => r.kbAnswerId !== null).length,
   };
@@ -158,6 +157,7 @@ export function quickPermissions(role: Role) {
     create: can(role, "rfp.create"),
     edit: can(role, "response.edit"),
     draft: can(role, "response.draft"),
+    remove: can(role, "rfp.edit"),
     approve: can(role, "response.approve"),
     promote: can(role, "kb.promote"),
     flag: can(role, "response.flag"),
@@ -193,9 +193,6 @@ export function quickStage(input: { intake: JobLike | null; draft: JobLike | nul
   };
   if (intake && (inFlight(intake) || intake.status === "failed")) return stage("intake", intake);
   if (draft && (inFlight(draft) || draft.status === "failed")) return stage("draft", draft);
-  if (intake?.status === "done" && !draft && intake.finishedAt) {
-    const handoff = now.getTime() - new Date(intake.finishedAt).getTime() < QUICK_HANDOFF_MS;
-    return { show: null, failed: false, stale: false, active: handoff };
-  }
+  // Intake done and no draft in flight: the page is idle and offers what to draft.
   return { show: null, failed: false, stale: false, active: false };
 }

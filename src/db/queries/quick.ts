@@ -104,6 +104,8 @@ export interface QuickRow {
   openPoints: string[];
   citations: Array<{ ordinal: number; sourceType: CitationSource; title: string | null }>;
   kbAnswerId: string | null;
+  /** A "Draft this question" job still queued or running, so the card shows progress after a reload. */
+  draftJobId: string | null;
 }
 
 /** Every question with its current answer in full, its sources and whether it is already a precedent. Null when the RFP is not in the workspace. */
@@ -131,6 +133,7 @@ export async function listQuickRows(workspaceId: string, rfpId: string): Promise
       instruction: responseRevisions.instruction,
       revisionAt: responseRevisions.createdAt,
       openPoints: responseRevisions.openPoints,
+      draftJobId: sql<string | null>`(select g.id from generation_jobs g where g.rfp_id = ${rfpQuestions.rfpId} and g.dedupe_key = 'draft:q:' || ${rfpQuestions.id}::text and g.status in ('queued', 'running') order by g.created_at desc limit 1)`,
     })
     .from(rfpQuestions)
     .leftJoin(responses, eq(responses.questionId, rfpQuestions.id))

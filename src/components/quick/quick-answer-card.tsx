@@ -1,13 +1,13 @@
 "use client";
 
-import { BookPlus, Check, Pencil, RefreshCw, Undo2 } from "lucide-react";
+import { BookPlus, Check, Pencil, RefreshCw, Trash2, Undo2, Zap } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { promoteToKb } from "@/app/actions/kb";
-import { approveAndPromote } from "@/app/actions/quick";
-import { regenerateResponse } from "@/app/actions/responses";
+import { approveAndPromote, removeQuickQuestion } from "@/app/actions/quick";
+import { draftQuestion, regenerateResponse } from "@/app/actions/responses";
 import { approveResponses, editResponse, unapproveResponses } from "@/app/actions/review";
 import { Chip, ComplianceChip, ConfidenceChip, ResponseStatusChip } from "@/components/chips/chips";
 import { Button } from "@/components/ui/button";
@@ -26,19 +26,22 @@ type Permissions = ReturnType<typeof quickPermissions>;
 const SOURCE_FALLBACK = { kb_entry: "Knowledge base", approved_answer: "Approved answer", rfp_document: "RFP document" } as const;
 
 /**
- * One question with its drafted answer and the four things a reviewer does
- * with it: edit, regenerate with an instruction, approve, and keep it as a
- * precedent. Model-authored text carries the teal hairline; approval and
- * "in knowledge base" are the only greens.
+ * One question. Undrafted, it offers "Draft this question" and "Remove"
+ * (`locked` while a batch or another request runs). Drafted, the four things
+ * a reviewer does with it: edit, regenerate with an instruction, approve, and
+ * keep it as a precedent. Model-authored text carries the teal hairline;
+ * approval and "in knowledge base" are the only greens.
  */
-export function QuickAnswerCard({ rfpId, row, permissions, now }: { rfpId: string; row: QuickRow; permissions: Permissions; now: Date }) {
+export function QuickAnswerCard({ rfpId, row, permissions, locked = false, now }: { rfpId: string; row: QuickRow; permissions: Permissions; locked?: boolean; now: Date }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [editing, setEditing] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   const [instruction, setInstruction] = useState("");
   const [jobId, setJobId] = useState<string | null>(null);
-  const [busy, setBusy] = useState<"approve" | "unapprove" | "promote" | "edit" | "regenerate" | null>(null);
+  const [draftJobId, setDraftJobId] = useState<string | null>(row.draftJobId);
+  const [confirmRemove, setConfirmRemove] = useState(false);
+  const [busy, setBusy] = useState<"approve" | "unapprove" | "promote" | "edit" | "regenerate" | "draft" | "remove" | null>(null);
 
   function run(kind: NonNullable<typeof busy>, fn: () => Promise<{ ok: boolean; error?: string }>, success?: string) {
     setBusy(kind);
@@ -121,8 +124,63 @@ export function QuickAnswerCard({ rfpId, row, permissions, now }: { rfpId: strin
               {row.instruction && <span> · “{row.instruction}”</span>}
             </div>
           </div>
+        ) : row.status === null ? (
+          <div className="flex flex-col gap-3">
+            <p className="text-ui italic text-muted-foreground">Not drafted yet.</p>
+            {draftJobId ? (
+              <JobProgress
+                jobId={draftJobId}
+                title="Drafting this answer"
+                detail="Drafted from the knowledge base with citations."
+                className="p-3"
+                onRetry={() => setDraftJobId(null)}
+                onDone={() => {
+                  setDraftJobId(null);
+                  toast.success("Answer drafted");
+                }}
+              />
+            ) : (
+              <div className="flex flex-wrap items-center gap-2">
+                {permissions.draft && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={locked || isPending}
+                    onClick={() =>
+                      run("draft", async () => {
+                        const r = await draftQuestion(rfpId, row.questionId);
+                        if (r.ok) setDraftJobId(r.data.jobId);
+                        return r;
+                      })
+                    }
+                  >
+                    {busy === "draft" ? <Spinner className="size-3.5" /> : <Zap />}
+                    Draft this question
+                  </Button>
+                )}
+                {permissions.remove &&
+                  (confirmRemove ? (
+                    <>
+                      <Button size="sm" variant="destructive" disabled={locked || isPending} onClick={() => run("remove", () => removeQuickQuestion(rfpId, row.questionId), "Question removed")}>
+                        {busy === "remove" ? <Spinner className="size-3.5" /> : <Trash2 />}
+                        Confirm removal
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => setConfirmRemove(false)} disabled={isPending}>
+                        Keep
+                      </Button>
+                    </>
+                  ) : (
+                    <Button size="sm" variant="ghost" disabled={locked || isPending} onClick={() => setConfirmRemove(true)}>
+                      <Trash2 />
+                      Remove
+                    </Button>
+                  ))}
+                {!permissions.draft && !permissions.remove && <span className="text-2xs text-muted-foreground">A consultant drafts this.</span>}
+              </div>
+            )}
+          </div>
         ) : (
-          <p className="text-ui italic text-muted-foreground">{row.status === null ? "Not drafted yet." : "The answer is empty."}</p>
+          <p className="text-ui italic text-muted-foreground">The answer is empty.</p>
         )}
 
         {regenerating && (

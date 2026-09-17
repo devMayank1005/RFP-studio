@@ -8,12 +8,12 @@ import { requireSession } from "@/lib/session";
 
 export const metadata: Metadata = { title: "Quick Q&A" };
 
-/** One session: progress while it drafts, then every question with its answer and the actions on it. */
+/** One session: intake progress, then the extracted questions with what to draft, then every answer and the actions on it. */
 export default async function QuickSessionPage({ params }: PageProps<"/quick/[rfpId]">) {
   const [session, { rfpId }] = await Promise.all([requireSession(), params]);
   const quick = await getQuickSession(session.workspaceId, rfpId);
   if (!quick) notFound();
-  const [rows, intake, draft] = await Promise.all([listQuickRows(session.workspaceId, quick.id), latestJob(quick.id, "quick"), latestJob(quick.id, "draft")]);
+  const [rows, intake, draft] = await Promise.all([listQuickRows(session.workspaceId, quick.id), latestJob(quick.id, "quick"), latestJob(quick.id, "draft", { dedupeKey: "draft:all" })]);
 
   return <QuickSessionView session={quick} rows={rows ?? []} intake={intake} draft={draft} role={session.role} now={new Date()} />;
 }
