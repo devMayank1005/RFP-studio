@@ -1,8 +1,8 @@
 
-import { and, count, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 
 import { db } from "@/db/client";
-import { clients, responses, rfpQuestions, rfps } from "@/db/schema";
+import { clients, rfps } from "@/db/schema";
 import type { EngagementType, RfpKind, RfpStatus } from "@/domain/enums";
 import { isUuid } from "@/domain/ids";
 
@@ -36,20 +36,18 @@ export async function listRfps(workspaceId: string): Promise<RfpListRow[]> {
       clientName: clients.name,
       dueDate: rfps.dueDate,
       updatedAt: rfps.updatedAt,
-      questionCount: count(rfpQuestions.id),
-      draftedCount: count(responses.id),
-      approvedCount: sql<number>`count(*) filter (where ${responses.status} = 'approved')`.mapWith(Number),
-      flaggedCount: sql<number>`count(*) filter (where ${responses.status} = 'flagged')`.mapWith(Number),
+      // Maintained by database triggers (migration 0006) — no join over every question and response.
+      questionCount: rfps.questionCount,
+      draftedCount: rfps.draftedCount,
+      approvedCount: rfps.approvedCount,
+      flaggedCount: rfps.flaggedCount,
     })
     .from(rfps)
     .innerJoin(clients, eq(rfps.clientId, clients.id))
-    .leftJoin(rfpQuestions, eq(rfpQuestions.rfpId, rfps.id))
-    .leftJoin(responses, eq(responses.questionId, rfpQuestions.id))
     .where(and(eq(rfps.workspaceId, workspaceId), eq(rfps.kind, "full")))
-    .groupBy(rfps.id, clients.name)
     .orderBy(desc(rfps.updatedAt));
 
-  return rows.map((r) => ({ ...r, questionCount: Number(r.questionCount), draftedCount: Number(r.draftedCount) }));
+  return rows;
 }
 
 export interface RfpHeader {
@@ -85,20 +83,16 @@ export async function getRfpHeader(workspaceId: string, rfpId: string): Promise<
       dueDate: rfps.dueDate,
       contextSummary: rfps.contextSummary,
       createdAt: rfps.createdAt,
-      questionCount: count(rfpQuestions.id),
-      draftedCount: count(responses.id),
-      approvedCount: sql<number>`count(*) filter (where ${responses.status} = 'approved')`.mapWith(Number),
+      questionCount: rfps.questionCount,
+      draftedCount: rfps.draftedCount,
+      approvedCount: rfps.approvedCount,
     })
     .from(rfps)
     .innerJoin(clients, eq(rfps.clientId, clients.id))
-    .leftJoin(rfpQuestions, eq(rfpQuestions.rfpId, rfps.id))
-    .leftJoin(responses, eq(responses.questionId, rfpQuestions.id))
     .where(and(eq(rfps.workspaceId, workspaceId), eq(rfps.id, rfpId)))
-    .groupBy(rfps.id, clients.name)
     .limit(1);
 
-  if (!row) return null;
-  return { ...row, questionCount: Number(row.questionCount), draftedCount: Number(row.draftedCount) };
+  return row ?? null;
 }
 
 export async function listClients(workspaceId: string) {

@@ -1,6 +1,6 @@
 import { and, asc, eq } from "drizzle-orm";
 
-import { db } from "@/db/client";
+import { db, type Executor } from "@/db/client";
 import { chroQuestions, clients, responseRevisions, responses, rfpQuestions, rfps } from "@/db/schema";
 import { sortChroRows, type ChroSourceRow } from "@/domain/chro";
 import { isUuid } from "@/domain/ids";
@@ -30,8 +30,8 @@ export async function listChroQuestions(workspaceId: string, rfpId: string): Pro
 }
 
 /** Every question with its current answer in full — the workspace's 240-char preview is not enough here. */
-export async function getChroSourceRows(rfpId: string): Promise<ChroSourceRow[]> {
-  const rows = await db
+export async function getChroSourceRows(rfpId: string, executor: Executor = db): Promise<ChroSourceRow[]> {
+  const rows = await executor
     .select({
       refNo: rfpQuestions.refNo,
       questionText: rfpQuestions.questionText,
@@ -49,8 +49,8 @@ export async function getChroSourceRows(rfpId: string): Promise<ChroSourceRow[]>
 }
 
 /** Client and RFP facts the prompt opens with; the same profile the brief was written from. */
-export async function getChroClientContext(rfpId: string) {
-  const [row] = await db
+export async function getChroClientContext(rfpId: string, executor: Executor = db) {
+  const [row] = await executor
     .select({
       workspaceId: rfps.workspaceId,
       rfpTitle: rfps.title,

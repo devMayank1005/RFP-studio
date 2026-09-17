@@ -70,18 +70,27 @@ test.describe("RFP Studio smoke", () => {
     await page.getByRole("link", { name: /Apex Manufacturing — HRMS implementation RFP/ }).click();
     await expect(page.getByRole("grid")).toBeVisible();
 
-    // Pick an unapproved row via the status facet — AI draft or Edited, whichever the shared demo still has — activate it, approve with A.
-    await page.getByRole("button", { name: /AI draft|Edited/ }).filter({ hasText: /[1-9]/ }).first().click();
+    // Start from an approved row (the shared demo always has some), take it
+    // back and approve it again, so the row ends exactly as it started —
+    // unapproving a flagged or AI-drafted row would not.
+    await page.getByRole("button", { name: /^Approved/ }).first().click();
     await page.keyboard.press("j");
-    // Scope to the panel: the status facet is also a button whose name starts with "Approve…".
+    // The status facet is also a button whose name starts with "Approve…", hence the panel scope.
     const panel = page.getByRole("tabpanel");
-    await expect(panel.getByRole("button", { name: /^Approve/ })).toBeVisible();
-    await page.keyboard.press("a");
-    await expect(panel.getByRole("button", { name: "Unapprove" })).toBeVisible();
+    const approve = panel.getByRole("button", { name: /^Approve/ });
+    const unapprove = panel.getByRole("button", { name: "Unapprove" });
+    await expect(unapprove).toBeVisible();
 
-    // And back, so the seed stays as it was.
-    await panel.getByRole("button", { name: "Unapprove" }).click();
-    await expect(panel.getByRole("button", { name: /^Approve/ })).toBeVisible();
+    // Each toggle is a server action; wait for its response, or the test ends
+    // (and the page closes) with the last write still in flight.
+    const actionDone = () => page.waitForResponse((r) => r.request().method() === "POST" && r.url().includes("/workspace"));
+    await Promise.all([actionDone(), unapprove.click()]);
+    await expect(approve).toBeVisible();
+    await Promise.all([actionDone(), page.keyboard.press("a")]);
+    await expect(unapprove).toBeVisible();
+    // The server agrees with the panel.
+    await page.reload();
+    await expect(unapprove).toBeVisible();
   });
 
   test("workspace: add an approved answer to the knowledge base", async ({ page }) => {

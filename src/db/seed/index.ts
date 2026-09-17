@@ -130,6 +130,7 @@ async function seedDemoRfp() {
     for (const item of section.questions) {
       const questionId = stableId("rfp_question", `${DEMO_RFP.id}:${item.ref}`);
       const question = {
+        workspaceId: WORKSPACE_ID,
         id: questionId,
         rfpId: DEMO_RFP.id,
         sectionId,

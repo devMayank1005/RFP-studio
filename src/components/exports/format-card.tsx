@@ -90,7 +90,7 @@ export function FormatCard({
             // useJob refreshes the router itself on settle; a second refresh here races it.
             onDone={() => {
               onSettled();
-              toast.success("Export ready", { description: "Download it from the history below." });
+              toast.success("Export ready", { id: `export-${activeJobId}`, description: "Download it from the history below." });
             }}
             className="p-3"
           />

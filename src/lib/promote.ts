@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import { writeAudit } from "@/db/audit";
 import { db } from "@/db/client";
@@ -71,7 +71,9 @@ export async function promoteResponse(session: AppSession, rfp: typeof rfps.$inf
         tags: result.tags,
         embedding,
       })
+      .onConflictDoNothing({ target: approvedAnswers.originResponseId, where: sql`${approvedAnswers.originResponseId} is not null` })
       .returning({ id: approvedAnswers.id });
+    if (!inserted) throw new ActionError("This answer is already in the knowledge base.");
     await writeAudit(tx, {
       workspaceId: session.workspaceId,
       actorId: session.userId,

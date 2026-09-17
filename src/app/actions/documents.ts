@@ -58,8 +58,9 @@ export async function uploadDocuments(rfpId: string, formData: FormData): Promis
         })
         .returning({ id: rfpDocuments.id });
 
-      const jobId = await createJob({ rfpId, jobType: "parse", payload: { documentId: doc.id, fileName: file.name }, createdBy: session.userId, progressTotal: 1 });
-      await sendJobEvent(documentUploaded.create({ rfpId, documentId: doc.id, jobId }), { jobId, onFailure: (reason) => markParseFailed(doc.id, reason) });
+      const jobId = await createJob({ rfpId, jobType: "parse", dedupeKey: `parse:${doc.id}`, payload: { documentId: doc.id, fileName: file.name }, createdBy: session.userId, progressTotal: 1 });
+      if (!jobId) throw new ActionError("That job is already running — give it a moment.");
+      await sendJobEvent(documentUploaded.create({ rfpId, workspaceId: session.workspaceId, documentId: doc.id, jobId }), { jobId, onFailure: (reason) => markParseFailed(doc.id, reason) });
       jobIds.push(jobId);
 
       await writeAudit(db, {
@@ -126,8 +127,9 @@ export async function startExtraction(rfpId: string): Promise<ActionResult<{ job
     if (!parsed.length) throw new ActionError("Upload and parse at least one RFP document first.");
     requireJobRunner();
 
-    const jobId = await createJob({ rfpId, jobType: "extract", payload: { documentIds: parsed.map((d) => d.id) }, createdBy: session.userId });
-    await sendJobEvent(extractRequested.create({ rfpId, jobId }), { jobId });
+    const jobId = await createJob({ rfpId, jobType: "extract", dedupeKey: "extract", payload: { documentIds: parsed.map((d) => d.id) }, createdBy: session.userId });
+    if (!jobId) throw new ActionError("Extraction is already running — give it a moment.");
+    await sendJobEvent(extractRequested.create({ rfpId, workspaceId: session.workspaceId, jobId }), { jobId });
     await writeAudit(db, {
       workspaceId: session.workspaceId,
       actorId: session.userId,
@@ -168,8 +170,9 @@ export async function retryParse(rfpId: string, documentId: string): Promise<Act
       .where(and(eq(generationJobs.rfpId, rfpId), eq(generationJobs.jobType, "parse"), eq(generationJobs.status, "queued"), sql`${generationJobs.payload}->>'documentId' = ${doc.id}`));
     await db.update(rfpDocuments).set({ parseStatus: "pending", parseError: null }).where(eq(rfpDocuments.id, doc.id));
 
-    const jobId = await createJob({ rfpId, jobType: "parse", payload: { documentId: doc.id, fileName: doc.fileName, retry: true }, createdBy: session.userId, progressTotal: 1 });
-    await sendJobEvent(documentUploaded.create({ rfpId, documentId: doc.id, jobId }), { jobId, onFailure: (reason) => markParseFailed(doc.id, reason) });
+    const jobId = await createJob({ rfpId, jobType: "parse", dedupeKey: `parse:${doc.id}`, payload: { documentId: doc.id, fileName: doc.fileName, retry: true }, createdBy: session.userId, progressTotal: 1 });
+    if (!jobId) throw new ActionError("That job is already running — give it a moment.");
+    await sendJobEvent(documentUploaded.create({ rfpId, workspaceId: session.workspaceId, documentId: doc.id, jobId }), { jobId, onFailure: (reason) => markParseFailed(doc.id, reason) });
     await writeAudit(db, { workspaceId: session.workspaceId, actorId: session.userId, entity: "rfp_document", entityId: doc.id, action: "document.parse_retried", diff: { fileName: doc.fileName, jobId } });
     revalidatePath(`/rfps/${rfpId}/setup/upload`);
     return { jobId };

@@ -41,8 +41,9 @@ export async function draftRfp(rfpId: string, questionIds?: string[]): Promise<A
     }
     if (!ids.length) throw new ActionError("Nothing to draft — every question already has a response.");
 
-    const jobId = await createJob({ rfpId, jobType: "draft", payload: { questionIds: ids }, createdBy: session.userId, progressTotal: ids.length });
-    await sendJobEvent(draftRequested.create({ rfpId, jobId, questionIds: ids, actorId: session.userId }), { jobId });
+    const jobId = await createJob({ rfpId, jobType: "draft", dedupeKey: "draft:all", payload: { questionIds: ids }, createdBy: session.userId, progressTotal: ids.length });
+    if (!jobId) throw new ActionError("Drafting is already running for this RFP — give it a moment.");
+    await sendJobEvent(draftRequested.create({ rfpId, workspaceId: session.workspaceId, jobId, questionIds: ids, actorId: session.userId }), { jobId });
     if (rfp.status === "questions_ready") await db.update(rfps).set({ status: "drafting" }).where(eq(rfps.id, rfpId));
     await writeAudit(db, { workspaceId: session.workspaceId, actorId: session.userId, entity: "rfp", entityId: rfpId, action: "draft.started", diff: { jobId, count: ids.length } });
     revalidatePath(`/rfps/${rfpId}`, "layout");
@@ -61,8 +62,9 @@ export async function regenerateResponse(rfpId: string, questionId: string, inst
     const [q] = await db.select({ id: rfpQuestions.id }).from(rfpQuestions).where(and(eq(rfpQuestions.id, questionId), eq(rfpQuestions.rfpId, rfpId))).limit(1);
     if (!q) throw new ActionError("Question not found.");
 
-    const jobId = await createJob({ rfpId, jobType: "draft", payload: { questionIds: [q.id], instruction: text }, createdBy: session.userId, progressTotal: 1 });
-    await sendJobEvent(draftRequested.create({ rfpId, jobId, questionIds: [q.id], instruction: text || undefined, actorId: session.userId }), { jobId });
+    const jobId = await createJob({ rfpId, jobType: "draft", dedupeKey: `draft:q:${q.id}`, payload: { questionIds: [q.id], instruction: text }, createdBy: session.userId, progressTotal: 1 });
+    if (!jobId) throw new ActionError("This answer is already being regenerated — give it a moment.");
+    await sendJobEvent(draftRequested.create({ rfpId, workspaceId: session.workspaceId, jobId, questionIds: [q.id], instruction: text || undefined, actorId: session.userId }), { jobId });
     await writeAudit(db, { workspaceId: session.workspaceId, actorId: session.userId, entity: "rfp_question", entityId: q.id, action: "response.regenerate", diff: { instruction: text } });
     return { jobId };
   });

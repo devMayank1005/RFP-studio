@@ -113,24 +113,32 @@ attachDatabasePool(pool);
 
 export const db = drizzle({ client: pool, schema });
 export type Db = typeof db;
+/** A transaction handle from `withOrg`/`db.transaction`. */
+export type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
+/** Where a query runs: the pool, or a transaction that has pinned the tenant. */
+export type Executor = Db | Tx;
 
 /**
- * Run work inside a transaction with the org identity pinned in `app.org_id`.
+ * Run work inside a transaction with the org identity pinned in `app.org_id`
+ * and row-level security switched on.
  *
- * NOTE: no Postgres policy reads that GUC today — RLS is not enabled on any
- * table, and the app role bypasses it anyway. Isolation comes from the explicit
- * `orgId` filter in every query. This is kept as the hook real policies would
- * use, not as protection that exists.
+ * Two `SET LOCAL`s, both scoped to this transaction so nothing leaks into the
+ * next request that borrows the same pooled connection:
  *
- * `SET LOCAL` scopes the setting to this transaction, so the value cannot leak
- * into the next request that borrows the same pooled connection.
+ * 1. `SET LOCAL ROLE rfp_tenant` — the connecting role owns the tables and, on
+ *    Neon, carries BYPASSRLS, so policies never apply to it. `rfp_tenant`
+ *    (migration 0007) is a plain role with the same table grants and no bypass.
+ * 2. `app.org_id` — every `<table>_tenant` policy (migration 0006) compares
+ *    `workspace_id` with it, so rows from other workspaces vanish, and a write
+ *    for another workspace is rejected.
  *
- * Writes go through here; reads do NOT, and with no RLS policies there is
- * nothing to fail closed against — a forgotten `where orgId = …` would simply
- * return another org's rows. The explicit filter is the isolation.
+ * Queries keep their explicit `workspaceId` filter; the policy is the second
+ * line of defence for a forgotten one. Outside `withOrg` no policy fires, so
+ * server components and jobs that have not moved under it behave as before.
  */
-export async function withOrg<T>(orgId: string, fn: (tx: Parameters<Parameters<Db["transaction"]>[0]>[0]) => Promise<T>): Promise<T> {
+export async function withOrg<T>(orgId: string, fn: (tx: Tx) => Promise<T>): Promise<T> {
   return db.transaction(async (tx) => {
+    await tx.execute(sql`set local role rfp_tenant`);
     await tx.execute(sql`select set_config('app.org_id', ${orgId}, true)`);
     return fn(tx);
   });

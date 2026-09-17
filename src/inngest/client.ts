@@ -13,16 +13,17 @@ import { readEnv, readSecret } from "@/lib/env";
  * (`inngest.send(documentUploaded.create({ ... }))`).
  */
 export const documentUploaded = eventType("rfp/document.uploaded", {
-  schema: z.object({ rfpId: z.string(), documentId: z.string(), jobId: z.string() }),
+  schema: z.object({ rfpId: z.string(), workspaceId: z.string(), documentId: z.string(), jobId: z.string() }),
 });
 
 export const extractRequested = eventType("rfp/extract.requested", {
-  schema: z.object({ rfpId: z.string(), jobId: z.string() }),
+  schema: z.object({ rfpId: z.string(), workspaceId: z.string(), jobId: z.string() }),
 });
 
 export const draftRequested = eventType("rfp/draft.requested", {
   schema: z.object({
     rfpId: z.string(),
+    workspaceId: z.string(),
     jobId: z.string(),
     questionIds: z.array(z.string()),
     instruction: z.string().optional(),
@@ -32,7 +33,7 @@ export const draftRequested = eventType("rfp/draft.requested", {
 
 /** The CHRO discovery agenda for one RFP. replace_suggested keeps kept rows; append adds to whatever is there. */
 export const chroRequested = eventType("rfp/chro.requested", {
-  schema: z.object({ rfpId: z.string(), jobId: z.string(), actorId: z.string(), mode: z.enum(["replace_suggested", "append"]) }),
+  schema: z.object({ rfpId: z.string(), workspaceId: z.string(), jobId: z.string(), actorId: z.string(), mode: z.enum(["replace_suggested", "append"]) }),
 });
 
 /** A document uploaded from the Knowledge base screen, to be read into entries. */
@@ -50,6 +51,7 @@ export const kbIngestRequested = eventType("kb/ingest.requested", {
 export const exportRequested = eventType("rfp/export.requested", {
   schema: z.object({
     rfpId: z.string(),
+    workspaceId: z.string(),
     exportId: z.string(),
     jobId: z.string(),
     format: z.enum(EXPORT_FORMATS),
@@ -61,6 +63,7 @@ export const exportRequested = eventType("rfp/export.requested", {
 export const quickRequested = eventType("rfp/quick.requested", {
   schema: z.object({
     rfpId: z.string(),
+    workspaceId: z.string(),
     jobId: z.string(),
     actorId: z.string(),
     source: z.enum(QUICK_SOURCES),

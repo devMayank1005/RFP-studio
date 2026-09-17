@@ -32,7 +32,7 @@ export const clients = pgTable(
       .$onUpdate(() => new Date())
       .notNull(),
   },
-  (t) => [index("clients_workspace_idx").on(t.workspaceId, t.name)],
+  (t) => [index("clients_workspace_idx").on(t.workspaceId, t.name), index("clients_name_trgm_idx").using("gin", t.name.op("gin_trgm_ops"))],
 );
 
 /**

@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 
 import type { Db } from "@/db/client";
-import { rfpQuestions, rfpSections } from "@/db/schema";
+import { rfpQuestions, rfpSections, rfps } from "@/db/schema";
 import { chunk, chunkPages, type ExtractedQuestion } from "@/domain/extraction";
 import { resolveColumns } from "@/engine/columns";
 import { extractFromPages, extractFromSheet } from "@/engine/extract";
@@ -55,6 +55,8 @@ type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 
 /** Replace the RFP's sections and questions with the extraction result; refs are re-numbered across documents so they stay unique. */
 export async function persistExtractedQuestions(tx: Tx, rfpId: string, all: ReadonlyArray<ExtractedQuestion & { documentId: string | null }>, knownSections: readonly string[]): Promise<{ questions: number; sections: number; withExisting: number }> {
+  const [owner] = await tx.select({ workspaceId: rfps.workspaceId }).from(rfps).where(eq(rfps.id, rfpId)).limit(1);
+  if (!owner) throw new Error("rfp vanished");
   await tx.delete(rfpQuestions).where(eq(rfpQuestions.rfpId, rfpId));
   await tx.delete(rfpSections).where(eq(rfpSections.rfpId, rfpId));
 
@@ -70,6 +72,7 @@ export async function persistExtractedQuestions(tx: Tx, rfpId: string, all: Read
     seen.add(refNo);
     return {
       rfpId,
+      workspaceId: owner.workspaceId,
       sectionId: sectionIds.get(q.sectionTitle.toLowerCase()) ?? null,
       refNo,
       questionText: q.questionText,

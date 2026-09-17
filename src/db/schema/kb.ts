@@ -1,14 +1,5 @@
 import { sql } from "drizzle-orm";
-import {
-  boolean,
-  index,
-  integer,
-  pgTable,
-  text,
-  timestamp,
-  uuid,
-  vector,
-} from "drizzle-orm/pg-core";
+import { boolean, index, integer, pgTable, text, timestamp, uniqueIndex, uuid, vector } from "drizzle-orm/pg-core";
 
 import { organization } from "./auth";
 import { availabilityEnum, jobStatusEnum, kbEntryTypeEnum, kbSourceKindEnum, moduleEnum } from "./enums";
@@ -96,5 +87,9 @@ export const approvedAnswers = pgTable(
   (t) => [
     index("approved_answers_workspace_idx").on(t.workspaceId, t.module),
     index("approved_answers_embedding_hnsw_idx").using("hnsw", t.embedding.op("vector_cosine_ops")),
+    // One precedent per response — the promote guard is enforced here, not only by a read-then-insert.
+    uniqueIndex("approved_answers_origin_response_uidx")
+      .on(t.originResponseId)
+      .where(sql`${t.originResponseId} is not null`),
   ],
 );

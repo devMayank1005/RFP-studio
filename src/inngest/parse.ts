@@ -19,7 +19,13 @@ export const parseUploadedDocument = inngest.createFunction(
   {
     id: "parse-document",
     retries: 2,
-    concurrency: { limit: 4 },
+    // A re-delivered event for the same job never starts a second run.
+    idempotency: "event.data.jobId",
+    // Per-workspace fairness first, then a global ceiling.
+    concurrency: [
+      { limit: 4, key: "event.data.workspaceId" },
+      { limit: 8 },
+    ],
     triggers: [documentUploaded],
     onFailure: async ({ event, error }) => {
       const { documentId, jobId } = event.data.event.data;

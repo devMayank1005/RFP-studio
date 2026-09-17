@@ -36,7 +36,13 @@ export const extractQuestions = inngest.createFunction(
   {
     id: "extract-questions",
     retries: 1,
-    concurrency: { limit: 2 },
+    // A re-delivered event for the same job never starts a second run.
+    idempotency: "event.data.jobId",
+    // Per-workspace fairness first, then a global ceiling.
+    concurrency: [
+      { limit: 2, key: "event.data.workspaceId" },
+      { limit: 4 },
+    ],
     triggers: [extractRequested],
     onFailure: async ({ event, error }) => {
       await finishJob(event.data.event.data.jobId, "failed", error.message);

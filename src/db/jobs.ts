@@ -1,7 +1,7 @@
 
 import { and, desc, eq, sql } from "drizzle-orm";
 
-import { db } from "@/db/client";
+import { db, type Executor } from "@/db/client";
 import { isUuid } from "@/domain/ids";
 import { generationJobs, rfps } from "@/db/schema";
 import type { JobStatus, JobType } from "@/domain/enums";
@@ -11,24 +11,33 @@ import type { JobStatus, JobType } from "@/domain/enums";
  * go; the row is the single source of truth for "how far along is this".
  */
 
+/**
+ * Insert a job. `dedupeKey` names the work ("draft:all", "export:xlsx", "parse:<docId>"…):
+ * the partial unique index on (rfp_id, dedupe_key) for queued/running rows makes a
+ * second live job with the same key a no-op, returned here as null. Callers retire
+ * stale queued jobs first (isStaleQueuedJob) so a lost worker never blocks forever.
+ */
 export async function createJob(input: {
   rfpId: string;
   jobType: JobType;
+  dedupeKey: string;
   payload?: Record<string, unknown>;
   createdBy?: string | null;
   progressTotal?: number;
-}): Promise<string> {
+}): Promise<string | null> {
   const [row] = await db
     .insert(generationJobs)
     .values({
       rfpId: input.rfpId,
       jobType: input.jobType,
+      dedupeKey: input.dedupeKey,
       payload: input.payload ?? {},
       createdBy: input.createdBy ?? null,
       progressTotal: input.progressTotal ?? 0,
     })
+    .onConflictDoNothing({ target: [generationJobs.rfpId, generationJobs.dedupeKey], where: sql`${generationJobs.status} in ('queued', 'running')` })
     .returning({ id: generationJobs.id });
-  return row.id;
+  return row?.id ?? null;
 }
 
 export async function markJobRunning(jobId: string, runId?: string) {
@@ -74,9 +83,9 @@ export interface JobView {
 }
 
 /** A job, only if its RFP belongs to the workspace. */
-export async function getJob(workspaceId: string, jobId: string): Promise<JobView | null> {
+export async function getJob(workspaceId: string, jobId: string, executor: Executor = db): Promise<JobView | null> {
   if (!isUuid(jobId)) return null;
-  const [row] = await db
+  const [row] = await executor
     .select({
       id: generationJobs.id,
       rfpId: generationJobs.rfpId,

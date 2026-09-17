@@ -1,7 +1,7 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { NonRetriableError } from "inngest";
 
-import { db } from "@/db/client";
+import { db, withOrg } from "@/db/client";
 import { bumpJobProgress, finishJob, markJobRunning, setJobProgress } from "@/db/jobs";
 import { getActiveBrand } from "@/db/queries/brand";
 import { retrieveApprovedAnswers, retrieveEntries } from "@/db/queries/kb";
@@ -34,23 +34,25 @@ export const draftResponses = inngest.createFunction(
   {
     id: "draft-responses",
     retries: 1,
-    concurrency: { limit: 2 },
+    // A re-delivered event for the same job never starts a second run.
+    idempotency: "event.data.jobId",
+    // Per-workspace fairness first, then a global ceiling.
+    concurrency: [
+      { limit: 2, key: "event.data.workspaceId" },
+      { limit: 4 },
+    ],
     triggers: [draftRequested],
     onFailure: async ({ event, error }) => {
       await finishJob(event.data.event.data.jobId, "failed", error.message);
     },
   },
   async ({ event, step, runId }) => {
-    const { rfpId, jobId, questionIds, instruction, actorId } = event.data;
+    const { rfpId, workspaceId, jobId, questionIds, instruction, actorId } = event.data;
 
     const ctx = await step.run("prepare", async () => {
       await markJobRunning(jobId, runId);
       await setJobProgress(jobId, 0, questionIds.length);
-      const [rfp] = await db
-        .select({ workspaceId: rfps.workspaceId, contextSummary: rfps.contextSummary, status: rfps.status })
-        .from(rfps)
-        .where(eq(rfps.id, rfpId))
-        .limit(1);
+      const [rfp] = await withOrg(workspaceId, (tx) => tx.select({ workspaceId: rfps.workspaceId, contextSummary: rfps.contextSummary, status: rfps.status }).from(rfps).where(eq(rfps.id, rfpId)).limit(1));
       if (!rfp) throw new NonRetriableError("rfp not found");
       if (rfp.status === "questions_ready") await db.update(rfps).set({ status: "drafting" }).where(eq(rfps.id, rfpId));
       const brand = await getActiveBrand(rfp.workspaceId);
@@ -152,11 +154,14 @@ async function draftOne(input: {
   await db.transaction(async (tx) => {
     let responseId = existing?.id;
     if (!responseId) {
+      // Two overlapping drafts of one question converge on the same response row.
       const [created] = await tx
         .insert(responses)
         .values({ questionId: q.id, status: "ai_draft", compliance: draft.compliance, confidence: draft.confidence.toFixed(3) })
+        .onConflictDoNothing({ target: responses.questionId })
         .returning({ id: responses.id });
-      responseId = created.id;
+      responseId = created?.id ?? (await tx.select({ id: responses.id }).from(responses).where(eq(responses.questionId, q.id)).limit(1))[0]?.id;
+      if (!responseId) throw new Error("response row vanished mid-draft");
     }
     const [{ version }] = await tx
       .select({ version: responseRevisions.version })

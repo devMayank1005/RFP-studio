@@ -2,7 +2,7 @@
 
 import { FileSpreadsheet, FileText, Presentation } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { requestExport } from "@/app/actions/exports";
@@ -49,13 +49,37 @@ export function ExportsPanel({
   const [shape, setShape] = useState<ExportShape>("fresh");
   const [pending, setPending] = useState<ExportFormat | null>(null);
   const [isPending, startTransition] = useTransition();
-  const [jobs, setJobs] = useState<Partial<Record<ExportFormat, string>>>(() => {
-    const active: Partial<Record<ExportFormat, string>> = {};
-    for (const r of history) {
-      if ((r.status === "queued" || r.status === "running") && r.jobId && !isStaleQueuedJob(r, now) && !active[r.format]) active[r.format] = r.jobId;
+  // Builds this panel started; a build already running when the page loads
+  // (or the history refreshes) is picked up from the rows instead.
+  const [jobs, setJobs] = useState<Partial<Record<ExportFormat, string>>>({});
+  const fromHistory = useMemo(() => activeBuilds(history, now), [history, now]);
+  // Jobs whose card has already settled: the history may still say "running"
+  // until its refresh lands, and must not resurrect the progress card.
+  const [settledIds, setSettledIds] = useState<ReadonlySet<string>>(() => new Set());
+  const active = (format: ExportFormat): string | null => {
+    const started = jobs[format];
+    if (started && !settledIds.has(started)) {
+      const row = history.find((r) => r.jobId === started);
+      // Not in the history yet (its refresh is pending) or still live: keep showing it.
+      if (!row || (row.status !== "done" && row.status !== "failed")) return started;
     }
-    return active;
-  });
+    const fromRows = fromHistory[format];
+    return fromRows && !settledIds.has(fromRows) ? fromRows : null;
+  };
+
+  // The history refreshes every 2 s while a build runs, so the server can
+  // report it finished before the card's poll sees it. Say so from here too;
+  // the toast id keeps the two paths from stacking two toasts.
+  const toasted = useRef(new Set<string>());
+  useEffect(() => {
+    for (const jobId of Object.values(jobs)) {
+      if (!jobId || toasted.current.has(jobId)) continue;
+      if (history.some((r) => r.jobId === jobId && r.status === "done")) {
+        toasted.current.add(jobId);
+        toast.success("Export ready", { id: `export-${jobId}`, description: "Download it from the history below." });
+      }
+    }
+  }, [history, jobs]);
 
   function build(format: ExportFormat) {
     setPending(format);
@@ -69,12 +93,16 @@ export function ExportsPanel({
     });
   }
 
-  const settle = (format: ExportFormat) => () =>
+  const settle = (format: ExportFormat) => () => {
+    const id = jobs[format] ?? fromHistory[format];
+    if (id) setSettledIds((ids) => (ids.has(id) ? ids : new Set(ids).add(id)));
     setJobs((j) => {
+      if (!(format in j)) return j;
       const next = { ...j };
       delete next[format];
       return next;
     });
+  };
 
   const roleHint = canBuild ? null : `Your role (${ROLE_LABEL[role]}) cannot create exports.`;
   const noQuestions = readiness.total === 0;
@@ -132,7 +160,7 @@ export function ExportsPanel({
           canBuild={canBuildNow}
           disabledHint={buildHint}
           pending={isPending && pending === "xlsx"}
-          activeJobId={jobs.xlsx ?? null}
+          activeJobId={active("xlsx")}
           progressTitle="Building the Excel export"
           progressDetail={shape === "fill" ? "Writing every answer into the client's own workbook." : "Laying out the client's columns, then Compliance, Response, Status, Owner, Open points and Sources."}
           onBuild={() => build("xlsx")}
@@ -159,7 +187,7 @@ export function ExportsPanel({
           canBuild={canBuildNow}
           disabledHint={buildHint ?? engineError}
           pending={isPending && pending === "docx"}
-          activeJobId={jobs.docx ?? null}
+          activeJobId={active("docx")}
           progressTitle="Building the Word export"
           progressDetail="Claude writes the executive summary from the approved answers, then the document is laid out."
           onBuild={() => build("docx")}
@@ -188,4 +216,13 @@ export function ExportsPanel({
       </div>
     </div>
   );
+}
+
+/** The newest live build per format, so a running job shows its progress after a reload. */
+function activeBuilds(history: ExportRow[], now: Date): Partial<Record<ExportFormat, string>> {
+  const active: Partial<Record<ExportFormat, string>> = {};
+  for (const r of history) {
+    if ((r.status === "queued" || r.status === "running") && r.jobId && !isStaleQueuedJob(r, now) && !active[r.format]) active[r.format] = r.jobId;
+  }
+  return active;
 }

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { withOrg } from "@/db/client";
 import { getWorkspaceRows } from "@/db/queries/workspace";
 import { getSession } from "@/lib/session";
 
@@ -9,7 +10,7 @@ export async function GET(_request: Request, ctx: RouteContext<"/api/rfps/[rfpId
   if (!session) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
 
   const { rfpId } = await ctx.params;
-  const data = await getWorkspaceRows(session.workspaceId, rfpId);
+  const data = await withOrg(session.workspaceId, (tx) => getWorkspaceRows(session.workspaceId, rfpId, tx));
   if (!data) return NextResponse.json({ error: "not found" }, { status: 404 });
 
   return NextResponse.json(data, { headers: { "cache-control": "no-store" } });

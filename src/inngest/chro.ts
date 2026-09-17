@@ -2,7 +2,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { NonRetriableError } from "inngest";
 
 import { writeAudit } from "@/db/audit";
-import { db } from "@/db/client";
+import { db, withOrg } from "@/db/client";
 import { bumpJobProgress, finishJob, markJobRunning, setJobProgress } from "@/db/jobs";
 import { getChroClientContext, getChroSourceRows } from "@/db/queries/chro";
 import { chroQuestions } from "@/db/schema";
@@ -21,21 +21,27 @@ export const generateChro = inngest.createFunction(
   {
     id: "generate-chro-questions",
     retries: 1,
-    concurrency: { limit: 2 },
+    // A re-delivered event for the same job never starts a second run.
+    idempotency: "event.data.jobId",
+    // Per-workspace fairness first, then a global ceiling.
+    concurrency: [
+      { limit: 2, key: "event.data.workspaceId" },
+      { limit: 4 },
+    ],
     triggers: [chroRequested],
     onFailure: async ({ event, error }) => {
       await finishJob(event.data.event.data.jobId, "failed", error.message);
     },
   },
   async ({ event, step, runId }) => {
-    const { rfpId, jobId, actorId, mode } = event.data;
+    const { rfpId, workspaceId, jobId, actorId, mode } = event.data;
 
     const input = await step.run("prepare", async (): Promise<ChroInput & { workspaceId: string }> => {
       await markJobRunning(jobId, runId);
       await setJobProgress(jobId, 0, 3);
-      const ctx = await getChroClientContext(rfpId);
+      const ctx = await withOrg(workspaceId, (tx) => getChroClientContext(rfpId, tx));
       if (!ctx) throw new NonRetriableError("rfp not found");
-      const { approved, gaps } = selectChroSources(await getChroSourceRows(rfpId));
+      const { approved, gaps } = selectChroSources(await withOrg(workspaceId, (tx) => getChroSourceRows(rfpId, tx)));
       const kept = await db
         .select({ theme: chroQuestions.theme, questionText: chroQuestions.questionText })
         .from(chroQuestions)

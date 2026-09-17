@@ -40,7 +40,7 @@ async function main() {
   const detected = detectKind(fileName);
   if (!detected) throw new Error(`unsupported file: ${fileName}`);
 
-  const [rfp] = await db.select({ id: rfps.id, status: rfps.status }).from(rfps).where(eq(rfps.id, rfpId)).limit(1);
+  const [rfp] = await db.select({ id: rfps.id, status: rfps.status, workspaceId: rfps.workspaceId }).from(rfps).where(eq(rfps.id, rfpId)).limit(1);
   if (!rfp) throw new Error(`rfp ${rfpId} not found`);
 
   const buffer = await readFile(file);
@@ -49,8 +49,9 @@ async function main() {
     .insert(rfpDocuments)
     .values({ rfpId, kind, fileName, fileUrl: url, mime: MIME[detected], sizeBytes: buffer.byteLength })
     .returning({ id: rfpDocuments.id });
-  const jobId = await createJob({ rfpId, jobType: "parse", payload: { documentId: doc.id, fileName, via: "simulate-upload" }, progressTotal: 1 });
-  await inngest.send(documentUploaded.create({ rfpId, documentId: doc.id, jobId }));
+  const jobId = await createJob({ rfpId, jobType: "parse", dedupeKey: `parse:${doc.id}`, payload: { documentId: doc.id, fileName, via: "simulate-upload" }, progressTotal: 1 });
+  if (!jobId) throw new Error("a parse job for this document is already live");
+  await inngest.send(documentUploaded.create({ rfpId, workspaceId: rfp.workspaceId, documentId: doc.id, jobId }));
   if (rfp.status === "draft") await db.update(rfps).set({ status: "parsing" }).where(eq(rfps.id, rfpId));
 
   console.log(`[upload] ${fileName} (${kind}) → document ${doc.id}, job ${jobId}, event sent`);

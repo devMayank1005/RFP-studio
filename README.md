@@ -141,11 +141,47 @@ Opt-in end-to-end cases: `E2E_WITH_MODEL=1` runs the cases that call Claude (a W
 session drafted to the end); `E2E_FILL_RFP_ID=<rfp id>` runs the filled-workbook export against an RFP whose
 original .xlsx questionnaire is parsed. Both need `pnpm inngest:dev` alongside `pnpm dev --port 3001`.
 
+## Tenancy, idempotency and the dashboard
+
+**Every query filters on `workspaceId`; Postgres checks it a second time.** Migration 0006 enables
+row-level security on the tenant tables (`rfps`, `rfp_questions`, `clients`, `brand_templates`, `audit_log`,
+`kb_sources`, `kb_entries`, `approved_answers`) with one `<table>_tenant` policy each: rows whose `workspace_id`
+differs from the transaction's `app.org_id` are invisible, and a write for another workspace is rejected. The
+policy is "enforce when set": outside `withOrg` nothing changes, so code that has not moved under it behaves
+exactly as before. `withOrg(workspaceId, tx => …)` in `src/db/client.ts` opens a transaction, switches to the
+`rfp_tenant` role (migration 0007 — the connecting role owns the tables and, on Neon, bypasses RLS, so a plain
+role with the same grants is what makes the policies bite) and sets `app.org_id`; both are `SET LOCAL`, so nothing
+leaks to the next request on the pooled connection. The API routes (`/api/search`, `/api/jobs/…`, the workspace and
+question-detail feeds, export download) and the job-side reads in the Inngest functions run under it; the read
+queries take an optional executor so the same function works on the pool or inside the transaction. Rules:
+a new tenant table gets a policy in its migration; a new externally reachable reader goes under `withOrg`;
+`pnpm db:rls-check` proves a foreign org sees zero rows and prints role diagnostics when it does not.
+
+**One live job per action.** `generation_jobs.dedupe_key` plus a partial unique index on
+`(rfp_id, dedupe_key)` over queued/running rows means `createJob` returns `null` instead of a second job when the
+same thing is already in flight (`parse:<documentId>`, `extract`, `draft:all`, `draft:q:<questionId>`, `chro`,
+`export:<format>`, `quick`); the action turns that into "already running". Every Inngest function declares
+`idempotency: "event.data.jobId"`, so a re-delivered event never starts a second run, and its concurrency is keyed
+by `event.data.workspaceId` (per-tenant limit plus a global one) so one workspace cannot starve another. Inserts
+that could race (`responses` per question, `approved_answers` per origin response) use `onConflictDoNothing` on a
+unique index rather than a read-then-write check.
+
+**Search is index-backed.** `pg_trgm` GIN indexes on `rfps.title`, `clients.name`, `rfp_questions.question_text`
+and `ref_no` make the ⌘K `ILIKE '%…%'` queries index scans; `rfp_questions.workspace_id` is a real column with an
+index, so questions are searched without going through `rfps`.
+
+**Dashboard counts are stored, not aggregated.** `rfps.question_count / drafted_count / approved_count /
+flagged_count` are maintained by Postgres triggers on `rfp_questions` and `responses` (`rfp_counts_refresh`), so
+the dashboard and RFP headers read four integers instead of joining every question and response in the
+workspace. `pnpm db:counts-check` recomputes and compares; if a raw-SQL write ever bypasses the triggers,
+`select rfp_counts_refresh(id) from rfps` repairs them.
+
 ## Scripts
 
 ```
 pnpm dev · build · lint · typecheck · test · test:e2e
 pnpm db:generate · db:migrate · db:push · db:studio · db:seed · db:ping · db:check-auth
+pnpm db:rls-check · db:counts-check              prove row-level security bites / dashboard counters match a recount
 pnpm kb:seed                                    embed KB entries / approved answers missing a vector
 pnpm kb:ingest <file> [--dry-run]               PDF/DOCX product doc → KB entries (same as the Sources tab's "Ingest a document")
 pnpm exec tsx scripts/extract-one.ts <file>     run extraction on a file and print what it found

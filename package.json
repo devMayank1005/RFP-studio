@@ -17,6 +17,8 @@
     "db:studio": "drizzle-kit studio",
     "db:seed": "tsx src/db/seed/index.ts",
     "db:ping": "tsx scripts/db-ping.ts",
+    "db:rls-check": "tsx scripts/rls-check.ts",
+    "db:counts-check": "tsx scripts/db-counts-check.ts",
     "db:check-auth": "node scripts/check-auth-schema.mjs",
     "kb:seed": "tsx scripts/kb-seed.ts",
     "kb:ingest": "tsx scripts/kb-ingest.ts",

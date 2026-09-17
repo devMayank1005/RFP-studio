@@ -23,7 +23,6 @@ export default async function ExportsPage({ params }: PageProps<"/rfps/[rfpId]/e
 
   return (
     <ExportsPanel
-      key={history.map((h) => `${h.id}:${h.status}`).join("|")}
       rfpId={rfp.id}
       readiness={exportReadiness(rows)}
       history={history}

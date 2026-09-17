@@ -103,8 +103,9 @@ async function createQuick(formData: FormData): Promise<string> {
         .returning({ id: rfpDocuments.id });
       documentId = doc.id;
     }
-    const jobId = await createJob({ rfpId: rfp.id, jobType: "quick", payload: { source: input.source, documentId, parsedTextUrl, fileName: upload?.name }, createdBy: session.userId });
-    await sendJobEvent(quickRequested.create({ rfpId: rfp.id, jobId, actorId: session.userId, source: input.source, documentId, parsedTextUrl }), { jobId });
+    const jobId = await createJob({ rfpId: rfp.id, jobType: "quick", dedupeKey: "quick", payload: { source: input.source, documentId, parsedTextUrl, fileName: upload?.name }, createdBy: session.userId });
+    if (!jobId) throw new ActionError("That job is already running — give it a moment.");
+    await sendJobEvent(quickRequested.create({ rfpId: rfp.id, workspaceId: session.workspaceId, jobId, actorId: session.userId, source: input.source, documentId, parsedTextUrl }), { jobId });
   } catch (err) {
     // A failure before the job exists leaves nothing behind; a failed send is already recorded on the job.
     if (!(err instanceof ActionError)) await db.delete(rfps).where(eq(rfps.id, rfp.id));
@@ -137,8 +138,9 @@ export async function retryQuickIntake(rfpId: string): Promise<ActionResult<{ jo
     if (last.status === "queued") await finishJob(last.id, "failed", "No worker picked this job up. Check the Inngest app is registered (curl -X PUT …/api/inngest), then try again.");
     const payload = last.payload as { source?: "paste" | "document"; documentId?: string; parsedTextUrl?: string; fileName?: string };
     if (!payload.source) throw new ActionError("The original input is missing; start a new session.");
-    const jobId = await createJob({ rfpId: rfp.id, jobType: "quick", payload: { ...payload, retryOf: last.id }, createdBy: session.userId });
-    await sendJobEvent(quickRequested.create({ rfpId: rfp.id, jobId, actorId: session.userId, source: payload.source, documentId: payload.documentId, parsedTextUrl: payload.parsedTextUrl }), { jobId });
+    const jobId = await createJob({ rfpId: rfp.id, jobType: "quick", dedupeKey: "quick", payload: { ...payload, retryOf: last.id }, createdBy: session.userId });
+    if (!jobId) throw new ActionError("The intake is already running — give it a moment.");
+    await sendJobEvent(quickRequested.create({ rfpId: rfp.id, workspaceId: session.workspaceId, jobId, actorId: session.userId, source: payload.source, documentId: payload.documentId, parsedTextUrl: payload.parsedTextUrl }), { jobId });
     await writeAudit(db, { workspaceId: session.workspaceId, actorId: session.userId, entity: "rfp", entityId: rfp.id, action: "quick.retried", diff: { jobId, retryOf: last.id } });
     revalidatePath(pagePath(rfp.id));
     return { jobId };

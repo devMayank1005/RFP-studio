@@ -50,6 +50,11 @@ export const rfps = pgTable(
     outcomeNotes: text("outcome_notes"),
     /** AI-written one-page brief, used as system context for every draft. */
     contextSummary: text("context_summary"),
+    /** Maintained by database triggers on rfp_questions and responses (migration 0006); read by the dashboard and header. */
+    questionCount: integer("question_count").notNull().default(0),
+    draftedCount: integer("drafted_count").notNull().default(0),
+    approvedCount: integer("approved_count").notNull().default(0),
+    flaggedCount: integer("flagged_count").notNull().default(0),
     createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
@@ -60,6 +65,7 @@ export const rfps = pgTable(
   (t) => [
     index("rfps_workspace_status_idx").on(t.workspaceId, t.status),
     index("rfps_client_idx").on(t.clientId),
+    index("rfps_title_trgm_idx").using("gin", t.title.op("gin_trgm_ops")),
   ],
 );
 
@@ -107,6 +113,10 @@ export const rfpQuestions = pgTable(
     rfpId: uuid("rfp_id")
       .notNull()
       .references(() => rfps.id, { onDelete: "cascade" }),
+    /** Denormalised from the RFP so tenant filters and row-level security work without a join. */
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
     sectionId: uuid("section_id").references(() => rfpSections.id, { onDelete: "set null" }),
     refNo: text("ref_no").notNull(),
     questionText: text("question_text").notNull(),
@@ -140,5 +150,9 @@ export const rfpQuestions = pgTable(
   (t) => [
     index("rfp_questions_rfp_sort_idx").on(t.rfpId, t.sortOrder),
     index("rfp_questions_section_idx").on(t.sectionId),
+    index("rfp_questions_workspace_idx").on(t.workspaceId),
+    // ⌘K search: ILIKE '%q%' over text is only index-assisted with trigram GIN (pg_trgm).
+    index("rfp_questions_text_trgm_idx").using("gin", t.questionText.op("gin_trgm_ops")),
+    index("rfp_questions_ref_trgm_idx").using("gin", t.refNo.op("gin_trgm_ops")),
   ],
 );

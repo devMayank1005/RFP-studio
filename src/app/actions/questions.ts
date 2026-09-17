@@ -117,6 +117,7 @@ export async function splitQuestion(rfpId: string, questionId: string, parts: st
       await tx.insert(rfpQuestions).values(
         texts.slice(1).map((text, i) => ({
           rfpId,
+          workspaceId: row.workspaceId,
           sectionId: row.sectionId,
           refNo: `${row.refNo}.${i + 2}`,
           questionText: text,

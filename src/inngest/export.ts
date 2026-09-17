@@ -1,7 +1,7 @@
 import { NonRetriableError } from "inngest";
 
 import { writeAudit } from "@/db/audit";
-import { db } from "@/db/client";
+import { db, withOrg } from "@/db/client";
 import { bumpJobProgress, finishJob, markJobRunning, setJobProgress } from "@/db/jobs";
 import { getActiveBrand } from "@/db/queries/brand";
 import { finishExportRow, getExportSource, markExportRunning, pickWorkbook } from "@/db/queries/exports";
@@ -27,7 +27,13 @@ export const buildExport = inngest.createFunction(
   {
     id: "build-export",
     retries: 1,
-    concurrency: { limit: 2 },
+    // A re-delivered event for the same job never starts a second run.
+    idempotency: "event.data.jobId",
+    // Per-workspace fairness first, then a global ceiling.
+    concurrency: [
+      { limit: 2, key: "event.data.workspaceId" },
+      { limit: 4 },
+    ],
     triggers: [exportRequested],
     onFailure: async ({ event, error }) => {
       const { jobId, exportId } = event.data.event.data;
@@ -36,7 +42,8 @@ export const buildExport = inngest.createFunction(
     },
   },
   async ({ event, step, runId }) => {
-    const { rfpId, exportId, jobId, format, actorId } = event.data;
+    const { rfpId, workspaceId, exportId, jobId, format, actorId } = event.data;
+    const loadSource = () => withOrg(workspaceId, (tx) => getExportSource(rfpId, tx));
     const options = event.data.options ?? {};
     const meta = EXPORT_FORMAT_META[format];
 
@@ -45,7 +52,7 @@ export const buildExport = inngest.createFunction(
       await markExportRunning(exportId);
       await setJobProgress(jobId, 0, meta.steps);
       if (!renderers[format]) throw new NonRetriableError(`The ${meta.label} export is not available yet.`);
-      const source = await getExportSource(rfpId);
+      const source = await loadSource();
       if (!source) throw new NonRetriableError("rfp not found");
       const brand = await getActiveBrand(source.workspaceId);
       const exportBrand: ExportBrand = {
@@ -64,7 +71,7 @@ export const buildExport = inngest.createFunction(
     const summarised = meta.needsEngine
       ? await step.run("summarise", async () => {
           if (engineConfigError) throw new NonRetriableError(engineConfigError);
-          const source = await getExportSource(rfpId);
+          const source = await loadSource();
           if (!source) throw new NonRetriableError("rfp not found");
           const model = buildExportModel({ ...source, sheets: [], generatedAt: new Date().toISOString() }, options);
           const input: SummaryInput = {
@@ -86,7 +93,7 @@ export const buildExport = inngest.createFunction(
       : null;
 
     const built = await step.run("render-and-upload", async () => {
-      const source = await getExportSource(rfpId);
+      const source = await loadSource();
       if (!source) throw new NonRetriableError("rfp not found");
       const parsed = await Promise.all(
         source.documents.filter((d) => d.parsedTextUrl).map(async (d) => ({ documentId: d.id, doc: await loadParsed(d.parsedTextUrl!) })),

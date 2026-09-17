@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 
-import { db } from "@/db/client";
+import { db, type Executor } from "@/db/client";
 import { approvedAnswers, kbEntries, responseCitations, responseRevisions, responses, rfpQuestions, rfpSections, rfps, user } from "@/db/schema";
 import type { CitationSource, Compliance, Generator, Module, Owner, QuestionType, ResponseStatus } from "@/domain/enums";
 import { isUuid } from "@/domain/ids";
@@ -40,18 +40,18 @@ export interface WorkspaceSection {
   sortOrder: number;
 }
 
-export async function getWorkspaceRows(workspaceId: string, rfpId: string): Promise<{ rows: WorkspaceRow[]; sections: WorkspaceSection[] } | null> {
+export async function getWorkspaceRows(workspaceId: string, rfpId: string, executor: Executor = db): Promise<{ rows: WorkspaceRow[]; sections: WorkspaceSection[] } | null> {
   if (!isUuid(rfpId)) return null;
-  const [owned] = await db.select({ id: rfps.id }).from(rfps).where(and(eq(rfps.id, rfpId), eq(rfps.workspaceId, workspaceId))).limit(1);
+  const [owned] = await executor.select({ id: rfps.id }).from(rfps).where(and(eq(rfps.id, rfpId), eq(rfps.workspaceId, workspaceId))).limit(1);
   if (!owned) return null;
 
   const [sections, rows] = await Promise.all([
-    db
+    executor
       .select({ id: rfpSections.id, title: rfpSections.title, sortOrder: rfpSections.sortOrder })
       .from(rfpSections)
       .where(eq(rfpSections.rfpId, rfpId))
       .orderBy(asc(rfpSections.sortOrder)),
-    db
+    executor
       .select({
         questionId: rfpQuestions.id,
         refNo: rfpQuestions.refNo,
@@ -156,9 +156,9 @@ export interface QuestionDetail {
 }
 
 /** Everything the context panel shows for one question: response, every revision, every citation. */
-export async function getQuestionDetail(workspaceId: string, rfpId: string, questionId: string): Promise<QuestionDetail | null> {
+export async function getQuestionDetail(workspaceId: string, rfpId: string, questionId: string, executor: Executor = db): Promise<QuestionDetail | null> {
   if (!isUuid(rfpId) || !isUuid(questionId)) return null;
-  const [q] = await db
+  const [q] = await executor
     .select({
       questionId: rfpQuestions.id,
       refNo: rfpQuestions.refNo,
@@ -172,7 +172,7 @@ export async function getQuestionDetail(workspaceId: string, rfpId: string, ques
     .limit(1);
   if (!q) return null;
 
-  const [response] = await db
+  const [response] = await executor
     .select({
       id: responses.id,
       status: responses.status,
@@ -189,9 +189,9 @@ export async function getQuestionDetail(workspaceId: string, rfpId: string, ques
   let revisions: RevisionView[] = [];
   let kbAnswerId: string | null = null;
   if (response) {
-    const [promoted] = await db.select({ id: approvedAnswers.id }).from(approvedAnswers).where(eq(approvedAnswers.originResponseId, response.id)).limit(1);
+    const [promoted] = await executor.select({ id: approvedAnswers.id }).from(approvedAnswers).where(eq(approvedAnswers.originResponseId, response.id)).limit(1);
     kbAnswerId = promoted?.id ?? null;
-    const revs = await db
+    const revs = await executor
       .select({
         id: responseRevisions.id,
         version: responseRevisions.version,
@@ -210,7 +210,7 @@ export async function getQuestionDetail(workspaceId: string, rfpId: string, ques
       .orderBy(desc(responseRevisions.version));
 
     const cites = revs.length
-      ? await db
+      ? await executor
           .select({
             id: responseCitations.id,
             revisionId: responseCitations.revisionId,

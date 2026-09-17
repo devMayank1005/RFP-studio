@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { withOrg } from "@/db/client";
 import { getQuestionDetail } from "@/db/queries/workspace";
 import { getSession } from "@/lib/session";
 
@@ -9,7 +10,7 @@ export async function GET(_request: Request, ctx: RouteContext<"/api/rfps/[rfpId
   if (!session) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
 
   const { rfpId, qid } = await ctx.params;
-  const detail = await getQuestionDetail(session.workspaceId, rfpId, qid);
+  const detail = await withOrg(session.workspaceId, (tx) => getQuestionDetail(session.workspaceId, rfpId, qid, tx));
   if (!detail) return NextResponse.json({ error: "not found" }, { status: 404 });
 
   return NextResponse.json(detail, { headers: { "cache-control": "no-store" } });

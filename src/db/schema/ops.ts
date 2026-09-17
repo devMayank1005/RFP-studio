@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { index, integer, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 import { user } from "./auth";
 import { brandTemplates } from "./core";
@@ -43,12 +43,19 @@ export const generationJobs = pgTable(
     payload: jsonb("payload").$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
     inngestRunId: text("inngest_run_id"),
     error: text("error"),
+    /** One live job per (rfp, key): "draft:all", "draft:q:<id>", "export:<format>", "parse:<docId>", "extract", "chro", "quick". */
+    dedupeKey: text("dedupe_key"),
     createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     startedAt: timestamp("started_at", { withTimezone: true }),
     finishedAt: timestamp("finished_at", { withTimezone: true }),
   },
-  (t) => [index("generation_jobs_rfp_idx").on(t.rfpId, t.createdAt)],
+  (t) => [
+    index("generation_jobs_rfp_idx").on(t.rfpId, t.createdAt),
+    uniqueIndex("generation_jobs_live_dedupe_uidx")
+      .on(t.rfpId, t.dedupeKey)
+      .where(sql`${t.status} in ('queued', 'running')`),
+  ],
 );
 
 export const exports = pgTable(

@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 
-import { db } from "@/db/client";
+import { db, type Executor } from "@/db/client";
 import { approvedAnswers, brandTemplates, chroQuestions, clients, exports as exportsTable, kbEntries, responseCitations, responseRevisions, responses, rfpDocuments, rfpQuestions, rfpSections, rfps, user } from "@/db/schema";
 import type { DocumentKind, ExportFormat, JobStatus, ResponseStatus } from "@/domain/enums";
 import type { ExportOptions, ExportSource } from "@/domain/export";
@@ -27,9 +27,9 @@ export type ExportSourceRows = Omit<ExportSource, "sheets" | "generatedAt"> & {
 };
 
 /** Every question with its current answer in full, citations with titles, kept CHRO questions and the parsed documents. Unscoped: callers are jobs. */
-export async function getExportSource(rfpId: string): Promise<ExportSourceRows | null> {
+export async function getExportSource(rfpId: string, executor: Executor = db): Promise<ExportSourceRows | null> {
   if (!isUuid(rfpId)) return null;
-  const [head] = await db
+  const [head] = await executor
     .select({
       id: rfps.id,
       workspaceId: rfps.workspaceId,
@@ -52,8 +52,8 @@ export async function getExportSource(rfpId: string): Promise<ExportSourceRows |
   if (!head) return null;
 
   const [sections, questions, chro, documents] = await Promise.all([
-    db.select({ id: rfpSections.id, title: rfpSections.title, sortOrder: rfpSections.sortOrder }).from(rfpSections).where(eq(rfpSections.rfpId, rfpId)).orderBy(asc(rfpSections.sortOrder)),
-    db
+    executor.select({ id: rfpSections.id, title: rfpSections.title, sortOrder: rfpSections.sortOrder }).from(rfpSections).where(eq(rfpSections.rfpId, rfpId)).orderBy(asc(rfpSections.sortOrder)),
+    executor
       .select({
         id: rfpQuestions.id,
         refNo: rfpQuestions.refNo,
@@ -80,11 +80,11 @@ export async function getExportSource(rfpId: string): Promise<ExportSourceRows |
       .leftJoin(responseRevisions, eq(responseRevisions.id, responses.currentRevisionId))
       .where(eq(rfpQuestions.rfpId, rfpId))
       .orderBy(asc(rfpQuestions.sortOrder)),
-    db
+    executor
       .select({ id: chroQuestions.id, theme: chroQuestions.theme, questionText: chroQuestions.questionText, rationale: chroQuestions.rationale, sortOrder: chroQuestions.sortOrder, status: chroQuestions.status, createdAt: chroQuestions.createdAt })
       .from(chroQuestions)
       .where(and(eq(chroQuestions.rfpId, rfpId), eq(chroQuestions.status, "kept"))),
-    db
+    executor
       .select({ id: rfpDocuments.id, kind: rfpDocuments.kind, fileName: rfpDocuments.fileName, fileUrl: rfpDocuments.fileUrl, parsedTextUrl: rfpDocuments.parsedTextUrl, createdAt: rfpDocuments.createdAt })
       .from(rfpDocuments)
       .where(and(eq(rfpDocuments.rfpId, rfpId), inArray(rfpDocuments.kind, ["rfp_main", "appendix"]), eq(rfpDocuments.parseStatus, "parsed")))
@@ -93,7 +93,7 @@ export async function getExportSource(rfpId: string): Promise<ExportSourceRows |
 
   const revisionIds = questions.map((q) => q.revisionId).filter((id): id is string => !!id);
   const citations = revisionIds.length
-    ? await db
+    ? await executor
         .select({
           revisionId: responseCitations.revisionId,
           ordinal: responseCitations.ordinal,
@@ -187,9 +187,9 @@ export async function listExports(workspaceId: string, rfpId: string): Promise<E
   return rows.map(toRow);
 }
 
-export async function getExport(workspaceId: string, exportId: string): Promise<(ExportRow & { fileUrl: string | null }) | null> {
+export async function getExport(workspaceId: string, exportId: string, executor: Executor = db): Promise<(ExportRow & { fileUrl: string | null }) | null> {
   if (!isUuid(exportId)) return null;
-  const [row] = await db
+  const [row] = await executor
     .select({ ...exportColumns, fileUrl: exportsTable.fileUrl })
     .from(exportsTable)
     .innerJoin(rfps, and(eq(rfps.id, exportsTable.rfpId), eq(rfps.workspaceId, workspaceId)))

@@ -24,7 +24,13 @@ export const quickIntake = inngest.createFunction(
   {
     id: "quick-intake",
     retries: 1,
-    concurrency: { limit: 2 },
+    // A re-delivered event for the same job never starts a second run.
+    idempotency: "event.data.jobId",
+    // Per-workspace fairness first, then a global ceiling.
+    concurrency: [
+      { limit: 2, key: "event.data.workspaceId" },
+      { limit: 4 },
+    ],
     triggers: [quickRequested],
     onFailure: async ({ event, error }) => {
       const { jobId, documentId } = event.data.event.data;
@@ -34,7 +40,7 @@ export const quickIntake = inngest.createFunction(
     },
   },
   async ({ event, step, runId }) => {
-    const { rfpId, jobId, actorId, source, documentId, parsedTextUrl } = event.data;
+    const { rfpId, workspaceId, jobId, actorId, source, documentId, parsedTextUrl } = event.data;
 
     const read = await step.run("read", async (): Promise<{ parsedTextUrl: string; fileName: string }> => {
       await markJobRunning(jobId, runId);
@@ -95,11 +101,12 @@ export const quickIntake = inngest.createFunction(
 
     const draft = await step.run("create-draft-job", async () => {
       const ids = (await db.select({ id: rfpQuestions.id }).from(rfpQuestions).where(eq(rfpQuestions.rfpId, rfpId)).orderBy(rfpQuestions.sortOrder)).map((r) => r.id);
-      const draftJobId = await createJob({ rfpId, jobType: "draft", payload: { questionIds: ids, quick: true }, createdBy: actorId, progressTotal: ids.length });
+      const draftJobId = await createJob({ rfpId, jobType: "draft", dedupeKey: "draft:all", payload: { questionIds: ids, quick: true }, createdBy: actorId, progressTotal: ids.length });
+      if (!draftJobId) throw new NonRetriableError("a draft job is already running for this session");
       await db.update(rfps).set({ status: "drafting" }).where(eq(rfps.id, rfpId));
       return { draftJobId, ids };
     });
-    await step.sendEvent("send-draft", draftRequested.create({ rfpId, jobId: draft.draftJobId, questionIds: draft.ids, actorId }));
+    await step.sendEvent("send-draft", draftRequested.create({ rfpId, workspaceId, jobId: draft.draftJobId, questionIds: draft.ids, actorId }));
 
     return { questions: count, draftJobId: draft.draftJobId };
   },

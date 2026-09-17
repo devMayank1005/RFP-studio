@@ -43,6 +43,20 @@
       "when": 1789566477574,
       "tag": "0005_quick_sessions",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789621003992,
+      "tag": "0006_hardening",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1789621636248,
+      "tag": "0007_tenant_role",
+      "breakpoints": true
     }
   ]
 }

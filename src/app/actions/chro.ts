@@ -50,14 +50,13 @@ export async function requestChroQuestions(rfpId: string, mode: "replace_suggest
     if (running && isStaleQueuedJob(running)) {
       // Nothing picked it up — the Inngest app was not registered when it was sent. Retire it so the button works again.
       await finishJob(running.id, "failed", "No worker picked this job up. Check the Inngest app is registered (curl -X PUT …/api/inngest), then try again.");
-    } else if (running && (running.status === "queued" || running.status === "running")) {
-      throw new ActionError("Claude is already writing the questions — give it a minute.");
     }
     const sources = await getChroSourceRows(rfp.id);
     if (!sources.some((s) => s.status !== null)) throw new ActionError("Draft and approve some answers first — the questions come from them.");
 
-    const jobId = await createJob({ rfpId: rfp.id, jobType: "chro", payload: { mode }, createdBy: session.userId, progressTotal: 3 });
-    await sendJobEvent(chroRequested.create({ rfpId: rfp.id, jobId, actorId: session.userId, mode }), { jobId });
+    const jobId = await createJob({ rfpId: rfp.id, jobType: "chro", dedupeKey: "chro", payload: { mode }, createdBy: session.userId, progressTotal: 3 });
+    if (!jobId) throw new ActionError("Claude is already writing the questions — give it a minute.");
+    await sendJobEvent(chroRequested.create({ rfpId: rfp.id, workspaceId: session.workspaceId, jobId, actorId: session.userId, mode }), { jobId });
     await writeAudit(db, { workspaceId: session.workspaceId, actorId: session.userId, entity: "rfp", entityId: rfp.id, action: "chro.generate.started", diff: { jobId, mode } });
     revalidatePath(pagePath(rfp.id));
     return { jobId };

@@ -18,7 +18,13 @@ export const ingestKbSource = inngest.createFunction(
   {
     id: "ingest-kb-source",
     retries: 1,
-    concurrency: { limit: 1 },
+    // A re-delivered event for the same job never starts a second run.
+    idempotency: "event.data.sourceId",
+    // Per-workspace fairness first, then a global ceiling.
+    concurrency: [
+      { limit: 1, key: "event.data.workspaceId" },
+      { limit: 2 },
+    ],
     triggers: [kbIngestRequested],
     onFailure: async ({ event, error }) => {
       await finishKbSource(event.data.event.data.sourceId, "failed", { error: error.message });

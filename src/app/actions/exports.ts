@@ -49,8 +49,6 @@ export async function requestExport(rfpId: string, format: ExportFormat, options
       // Nothing picked it up — the Inngest app was not registered when it was sent. Retire it so the button works again.
       await finishExportRow(active.id, { status: "failed", error: "No worker picked this build up. Check the Inngest app is registered, then try again." });
       if (active.jobId) await finishJob(active.jobId, "failed", "No worker picked this job up. Check the Inngest app is registered (curl -X PUT …/api/inngest), then try again.");
-    } else if (active) {
-      throw new ActionError(`A ${meta.label} export is already being built — give it a moment.`);
     }
 
     const rows = await getExportReadinessRows(session.workspaceId, rfp.id);
@@ -61,9 +59,13 @@ export async function requestExport(rfpId: string, format: ExportFormat, options
 
     const brandTemplateId = await activeBrandTemplateId(session.workspaceId);
     const exportId = await createExportRow({ rfpId: rfp.id, format: input.format, brandTemplateId, options: opts, createdBy: session.userId });
-    const jobId = await createJob({ rfpId: rfp.id, jobType: "export", payload: { exportId, format: input.format, ...opts }, createdBy: session.userId, progressTotal: meta.steps });
+    const jobId = await createJob({ rfpId: rfp.id, jobType: "export", dedupeKey: `export:${input.format}`, payload: { exportId, format: input.format, ...opts }, createdBy: session.userId, progressTotal: meta.steps });
+    if (!jobId) {
+      await deleteExportRow(exportId);
+      throw new ActionError(`A ${meta.label} export is already being built — give it a moment.`);
+    }
     await setExportJob(exportId, jobId);
-    await sendJobEvent(exportRequested.create({ rfpId: rfp.id, exportId, jobId, format: input.format, actorId: session.userId, options: opts }), {
+    await sendJobEvent(exportRequested.create({ rfpId: rfp.id, workspaceId: session.workspaceId, exportId, jobId, format: input.format, actorId: session.userId, options: opts }), {
       jobId,
       onFailure: (reason) => finishExportRow(exportId, { status: "failed", error: `Not queued: ${reason}` }),
     });
