@@ -22,7 +22,7 @@ export const ingestKbSource = inngest.createFunction(
     retries: 1,
     // A re-delivered event for the same job never starts a second run.
     idempotency: "event.data.sourceId",
-    // Per-workspace fairness first, then a global ceiling.
+    // Per-workspace fairness first, then a global ceiling (Inngest's free plan allows 5 concurrent steps in total).
     concurrency: [
       { limit: 1, key: "event.data.workspaceId" },
       { limit: 2 },

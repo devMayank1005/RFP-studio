@@ -37,7 +37,7 @@ export const draftResponses = inngest.createFunction(
     retries: 1,
     // A re-delivered event for the same job never starts a second run.
     idempotency: "event.data.jobId",
-    // Per-workspace fairness first, then a global ceiling.
+    // Per-workspace fairness first, then a global ceiling (Inngest's free plan allows 5 concurrent steps in total).
     concurrency: [
       { limit: 2, key: "event.data.workspaceId" },
       { limit: 4 },
