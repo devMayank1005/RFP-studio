@@ -57,6 +57,13 @@
       "when": 1789621636248,
       "tag": "0007_tenant_role",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1789626697163,
+      "tag": "0008_ops_hardening",
+      "breakpoints": true
     }
   ]
 }

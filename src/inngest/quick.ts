@@ -8,6 +8,7 @@ import type { ExtractedQuestion } from "@/domain/extraction";
 import { questionsFromLines } from "@/domain/quick";
 import { putJson, readPrivate, rfpParsedPath } from "@/lib/blob";
 import { parseDocument } from "@/lib/parsing";
+import { failJob } from "@/lib/jobs";
 
 import { draftRequested, inngest, quickRequested } from "./client";
 import { countChunks, extractParsedDocument, persistExtractedQuestions } from "./extract-shared";
@@ -33,10 +34,10 @@ export const quickIntake = inngest.createFunction(
     ],
     triggers: [quickRequested],
     onFailure: async ({ event, error }) => {
-      const { jobId, documentId } = event.data.event.data;
-      if (documentId) await db.update(rfpDocuments).set({ parseStatus: "failed", parseError: error.message.slice(0, 500) }).where(eq(rfpDocuments.id, documentId));
+      const { jobId, documentId, rfpId } = event.data.event.data;
+      const message = await failJob(jobId, error, { where: "job:quick", rfpId });
+      if (documentId) await db.update(rfpDocuments).set({ parseStatus: "failed", parseError: message }).where(eq(rfpDocuments.id, documentId));
       // The session stays in "parsing" so a Retry can run the intake again.
-      await finishJob(jobId, "failed", error.message);
     },
   },
   async ({ event, step, runId }) => {

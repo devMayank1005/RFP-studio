@@ -14,6 +14,7 @@ import { ActionError, requireCan, requireRfp, runAction, type ActionResult } fro
 import { deletePrivate, rfpUploadPath, uploadPrivate } from "@/lib/blob";
 import { requireJobRunner, sendJobEvent } from "@/lib/jobs";
 import { detectKind } from "@/lib/parsing";
+import { requireBudget } from "@/lib/rate-limit";
 
 const MAX_BYTES = 20 * 1024 * 1024;
 
@@ -30,6 +31,7 @@ async function markParseFailed(documentId: string, reason: string) {
 export async function uploadDocuments(rfpId: string, formData: FormData): Promise<ActionResult<{ jobIds: string[] }>> {
   return runAction(async () => {
     const session = await requireCan("rfp.edit");
+    await requireBudget(session, "jobs:user");
     const rfp = await requireRfp(session, rfpId);
     if (!["draft", "parsing"].includes(rfp.status)) throw new ActionError("Documents can only be added before questions are confirmed.");
     requireJobRunner();
@@ -111,6 +113,7 @@ export async function deleteDocument(rfpId: string, documentId: string): Promise
 export async function startExtraction(rfpId: string): Promise<ActionResult<{ jobId: string }>> {
   return runAction(async () => {
     const session = await requireCan("rfp.edit");
+    await requireBudget(session, "jobs:user");
     const rfp = await requireRfp(session, rfpId);
     if (!["draft", "parsing"].includes(rfp.status)) throw new ActionError("Questions are already confirmed for this RFP.");
 
@@ -151,6 +154,7 @@ export async function startExtraction(rfpId: string): Promise<ActionResult<{ job
 export async function retryParse(rfpId: string, documentId: string): Promise<ActionResult<{ jobId: string }>> {
   return runAction(async () => {
     const session = await requireCan("rfp.edit");
+    await requireBudget(session, "jobs:user");
     const rfp = await requireRfp(session, rfpId);
     if (!["draft", "parsing"].includes(rfp.status)) throw new ActionError("Documents are locked once questions are confirmed.");
     requireJobRunner();

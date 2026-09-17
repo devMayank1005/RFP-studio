@@ -11,6 +11,7 @@ import { responses, rfpQuestions, rfps } from "@/db/schema";
 import { draftRequested } from "@/inngest/client";
 import { ActionError, requireCan, requireRfp, runAction, type ActionResult } from "@/lib/actions";
 import { requireJobRunner, sendJobEvent } from "@/lib/jobs";
+import { requireBudget } from "@/lib/rate-limit";
 
 const DRAFTABLE = new Set(["questions_ready", "drafting", "in_review", "approved"]);
 
@@ -21,6 +22,7 @@ const DRAFTABLE = new Set(["questions_ready", "drafting", "in_review", "approved
 export async function draftRfp(rfpId: string, questionIds?: string[]): Promise<ActionResult<{ jobId: string; count: number }>> {
   return runAction(async () => {
     const session = await requireCan("response.draft");
+    await requireBudget(session, "jobs:user");
     const rfp = await requireRfp(session, rfpId);
     if (!DRAFTABLE.has(rfp.status)) throw new ActionError("Confirm the question list before drafting.");
     requireJobRunner();
@@ -55,6 +57,7 @@ export async function draftRfp(rfpId: string, questionIds?: string[]): Promise<A
 export async function regenerateResponse(rfpId: string, questionId: string, instruction: string): Promise<ActionResult<{ jobId: string }>> {
   return runAction(async () => {
     const session = await requireCan("response.draft");
+    await requireBudget(session, "jobs:user");
     const rfp = await requireRfp(session, rfpId);
     if (!DRAFTABLE.has(rfp.status)) throw new ActionError("Confirm the question list before drafting.");
     requireJobRunner();

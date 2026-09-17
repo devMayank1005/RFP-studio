@@ -13,6 +13,7 @@ import { engineConfigError } from "@/engine/client";
 import { generateExecutiveSummary } from "@/engine/summary";
 import { readPrivate, rfpExportPath, uploadPrivate } from "@/lib/blob";
 import { renderers, resolveLogo } from "@/lib/export";
+import { failJob } from "@/lib/jobs";
 
 import { exportRequested, inngest } from "./client";
 import { loadParsed } from "./parse";
@@ -37,8 +38,8 @@ export const buildExport = inngest.createFunction(
     triggers: [exportRequested],
     onFailure: async ({ event, error }) => {
       const { jobId, exportId } = event.data.event.data;
-      await finishJob(jobId, "failed", error.message);
-      await finishExportRow(exportId, { status: "failed", error: error.message });
+      const message = await failJob(jobId, error, { where: "job:export", exportId });
+      await finishExportRow(exportId, { status: "failed", error: message });
     },
   },
   async ({ event, step, runId }) => {

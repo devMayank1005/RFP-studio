@@ -5,6 +5,7 @@ import { extractQuestions } from "./extract";
 import { ingestKbSource } from "./ingest-kb";
 import { parseUploadedDocument } from "./parse";
 import { quickIntake } from "./quick";
+import { sweep } from "./sweep";
 
 /** Every function the app registers with Inngest. `api/inngest/route.ts` serves this list. */
-export const functions = [parseUploadedDocument, extractQuestions, draftResponses, ingestKbSource, generateChro, buildExport, quickIntake];
+export const functions = [parseUploadedDocument, extractQuestions, draftResponses, ingestKbSource, generateChro, buildExport, quickIntake, sweep];

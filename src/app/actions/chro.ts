@@ -15,6 +15,7 @@ import { engineConfigError } from "@/engine/client";
 import { chroRequested } from "@/inngest/client";
 import { ActionError, requireCan, requireRfp, runAction, type ActionResult } from "@/lib/actions";
 import { requireJobRunner, sendJobEvent } from "@/lib/jobs";
+import { requireBudget } from "@/lib/rate-limit";
 
 /**
  * The CHRO tab's mutations. Generation is a job (Opus takes a minute or
@@ -43,6 +44,7 @@ function pagePath(rfpId: string) {
 export async function requestChroQuestions(rfpId: string, mode: "replace_suggested" | "append"): Promise<ActionResult<{ jobId: string }>> {
   return runAction(async () => {
     const session = await requireCan("rfp.edit");
+    await requireBudget(session, "jobs:user");
     const rfp = await requireRfp(session, rfpId);
     if (engineConfigError) throw new ActionError(engineConfigError);
     requireJobRunner();

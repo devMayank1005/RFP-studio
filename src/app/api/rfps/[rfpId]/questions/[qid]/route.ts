@@ -2,12 +2,15 @@ import { NextResponse } from "next/server";
 
 import { withOrg } from "@/db/client";
 import { getQuestionDetail } from "@/db/queries/workspace";
+import { apiBudget } from "@/lib/rate-limit";
 import { getSession } from "@/lib/session";
 
 /** The context panel's detail: response, revisions, citations. Fetched on selection, prefetched for neighbours. */
 export async function GET(_request: Request, ctx: RouteContext<"/api/rfps/[rfpId]/questions/[qid]">) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+  const limited = await apiBudget(session, "api:session");
+  if (limited) return limited;
 
   const { rfpId, qid } = await ctx.params;
   const detail = await withOrg(session.workspaceId, (tx) => getQuestionDetail(session.workspaceId, rfpId, qid, tx));

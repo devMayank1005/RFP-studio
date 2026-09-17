@@ -86,3 +86,14 @@ export const exports = pgTable(
   },
   (t) => [index("exports_rfp_idx").on(t.rfpId, t.createdAt)],
 );
+
+/**
+ * The app's own fixed-window rate limiter (src/lib/rate-limit.ts): one row per
+ * `<scope>:<subject>`, rolled by the upsert itself. No tenant column — the key
+ * carries the subject — and the sweeper deletes rows older than an hour.
+ */
+export const rateLimits = pgTable("rate_limits", {
+  key: text("key").primaryKey(),
+  windowStart: timestamp("window_start", { withTimezone: true }).notNull(),
+  count: integer("count").notNull(),
+});

@@ -11,7 +11,9 @@ import {
   text,
   timestamp,
   boolean,
+  bigint,
   index,
+  integer,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 
@@ -189,3 +191,19 @@ export const invitationRelations = relations(invitation, ({ one }) => ({
     references: [user.id],
   }),
 }));
+
+/**
+ * Better Auth's rate-limit store (`rateLimit: { storage: "database" }` in
+ * src/lib/auth.ts). Field names are the runtime's; the CLI does not generate
+ * this table, so it is written by hand.
+ */
+export const rateLimit = pgTable(
+  "rate_limit",
+  {
+    id: text("id").primaryKey(),
+    key: text("key").notNull(),
+    count: integer("count").notNull(),
+    lastRequest: bigint("last_request", { mode: "number" }).notNull(),
+  },
+  (t) => [index("rate_limit_key_idx").on(t.key)],
+);

@@ -21,6 +21,7 @@ import { putJson, rfpQuickPastePath, rfpUploadPath, uploadPrivate } from "@/lib/
 import { requireJobRunner, sendJobEvent } from "@/lib/jobs";
 import { detectKind } from "@/lib/parsing";
 import { promoteResponse } from "@/lib/promote";
+import { requireBudget } from "@/lib/rate-limit";
 
 import { approveResponses } from "./review";
 
@@ -53,6 +54,7 @@ export async function createQuickSession(_prev: QuickCreateState, formData: Form
 
 async function createQuick(formData: FormData): Promise<string> {
   const session = await requireCan("rfp.create");
+  await requireBudget(session, "jobs:user");
   if (engineConfigError) throw new ActionError(engineConfigError);
   requireJobRunner();
 
@@ -128,6 +130,7 @@ async function createQuick(formData: FormData): Promise<string> {
 export async function retryQuickIntake(rfpId: string): Promise<ActionResult<{ jobId: string }>> {
   return runAction(async () => {
     const session = await requireCan("rfp.edit");
+    await requireBudget(session, "jobs:user");
     const rfp = await requireRfp(session, rfpId);
     if (rfp.kind !== "quick") throw new ActionError("Not a Quick Q&A session.");
     if (rfp.status !== "parsing") throw new ActionError("The questions are already in — draft them from the session page.");
@@ -151,6 +154,7 @@ export async function retryQuickIntake(rfpId: string): Promise<ActionResult<{ jo
 export async function approveAndPromote(rfpId: string, questionId: string): Promise<ActionResult<{ approvedAnswerId: string; canonicalQuestion: string }>> {
   return runAction(async () => {
     const session = await requireCan("kb.promote");
+    await requireBudget(session, "model:user");
     const rfp = await requireRfp(session, rfpId);
     const qid = z.string().uuid().parse(questionId);
     // Configuration problems are refused before anything is approved, so a half-done click cannot happen.

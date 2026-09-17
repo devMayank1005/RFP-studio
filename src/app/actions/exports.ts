@@ -15,6 +15,7 @@ import { exportRequested } from "@/inngest/client";
 import { ActionError, parseInput, requireCan, requireRfp, runAction, type ActionResult } from "@/lib/actions";
 import { deletePrivate } from "@/lib/blob";
 import { requireJobRunner, sendJobEvent } from "@/lib/jobs";
+import { requireBudget } from "@/lib/rate-limit";
 
 /**
  * Exports: one build per request, run by Inngest. The action writes the
@@ -36,6 +37,7 @@ function pagePath(rfpId: string) {
 export async function requestExport(rfpId: string, format: ExportFormat, options?: ExportOptions): Promise<ActionResult<{ jobId: string; exportId: string }>> {
   return runAction(async () => {
     const session = await requireCan("export.create");
+    await requireBudget(session, "jobs:user");
     const rfp = await requireRfp(session, rfpId);
     const input = parseInput(requestSchema, { format, options });
     const meta = EXPORT_FORMAT_META[input.format];

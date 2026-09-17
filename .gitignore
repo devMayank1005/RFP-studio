@@ -56,8 +56,6 @@ next-env.d.ts
 
 CLAUDE.md
 AGENTS.md
-.env.example
-.env.local
 # extraction dumps from scripts/extract-one.ts
 fixtures/**/*.extracted.json
 .claude

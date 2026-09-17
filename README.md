@@ -176,12 +176,46 @@ the dashboard and RFP headers read four integers instead of joining every questi
 workspace. `pnpm db:counts-check` recomputes and compares; if a raw-SQL write ever bypasses the triggers,
 `select rfp_counts_refresh(id) from rfps` repairs them.
 
+## Operations
+
+**Errors.** There is no error vendor. `reportError` (`src/lib/report.ts`) writes one redacted JSON line per
+error, and Next's `onRequestError` hook (`src/instrumentation.ts`) reports every server-side throw with the
+route that produced it; `runAction` reports any non-`ActionError` before rethrowing, and every job's
+`onFailure` goes through `failJob`, which stores a redacted, capped reason on the job row and reports the
+original. In Vercel → Project → Logs, filter on `level:error`; the `where` field says which part of the app
+(`request`, `action`, `job:draft`, `sweep`), and the `digest` matches what the user sees on the error page.
+The root boundary is `src/app/global-error.tsx`; the signed-in one is `src/app/(app)/error.tsx`.
+
+**Rate limits.** Fixed windows per user in Postgres (`rate_limits`, one upsert per limited call — an in-memory
+counter would be per instance on Fluid compute). Policy in `src/domain/rate-limit.ts`:
+
+| Scope | Where | Limit |
+|---|---|---|
+| `model:user` | actions that call Claude or Voyage inline: save/update a KB entry, Add to KB, approve-and-promote | 30 / min |
+| `jobs:user` | every action that enqueues a job: upload, extract, draft, regenerate, CHRO, export, Quick Q&A, KB ingest | 20 / min |
+| `api:session` | the polled JSON routes (search, jobs, workspace, question detail, export download) | 300 / min |
+
+Over the limit an action returns "Slow down — try again in N s." and a route answers 429 with `Retry-After`.
+Better Auth's own limiter runs against the database too (`rateLimit` table): 10 sign-ins a minute per IP.
+
+**Sweeper.** The `sweep` Inngest function runs every 10 minutes (`src/inngest/sweep.ts`, rules in
+`src/domain/sweep.ts`): a job still `queued` after 5 minutes or `running` after 30 is marked failed with a
+reason (and its export, document or KB source row with it); files in Blob storage whose RFP is gone are
+deleted at once, and unreferenced files of live RFPs or KB sources after a day; rate-limit rows older than an
+hour are dropped. `pnpm sweep:preview` prints what the next run would do without doing it.
+
+**Secrets.** `pnpm lint` (so every Vercel build) runs `scripts/secrets-check.mjs`: no env file other than
+`.env.example` may be tracked, and no tracked line may look like an Anthropic, Inngest, Vercel Blob or Neon
+credential or a password inside a connection string. Every new variable goes into `.env.example` with a
+placeholder, and `/api/inngest` refuses to serve (503) in production until both Inngest keys are set.
+
 ## Scripts
 
 ```
 pnpm dev · build · lint · typecheck · test · test:e2e
 pnpm db:generate · db:migrate · db:push · db:studio · db:seed · db:ping · db:check-auth
 pnpm db:rls-check · db:counts-check              prove row-level security bites / dashboard counters match a recount
+pnpm secrets:check · sweep:preview               refuse credential-shaped tracked text / show what the sweeper would reap and delete
 pnpm kb:seed                                    embed KB entries / approved answers missing a vector
 pnpm kb:ingest <file> [--dry-run]               PDF/DOCX product doc → KB entries (same as the Sources tab's "Ingest a document")
 pnpm exec tsx scripts/extract-one.ts <file>     run extraction on a file and print what it found

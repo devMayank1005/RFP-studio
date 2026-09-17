@@ -10,6 +10,7 @@ import { numberPassages, type Passage } from "@/domain/drafting";
 import { draftResponse } from "@/engine/draft";
 import { embedQuery, questionEmbedText } from "@/engine/embed";
 import { chunk } from "@/domain/extraction";
+import { failJob } from "@/lib/jobs";
 
 import { DRAFT_PROMPT_VERSION } from "../../prompts/draft";
 
@@ -43,7 +44,7 @@ export const draftResponses = inngest.createFunction(
     ],
     triggers: [draftRequested],
     onFailure: async ({ event, error }) => {
-      await finishJob(event.data.event.data.jobId, "failed", error.message);
+      await failJob(event.data.event.data.jobId, error, { where: "job:draft", rfpId: event.data.event.data.rfpId });
     },
   },
   async ({ event, step, runId }) => {

@@ -7,6 +7,7 @@ import { getDocumentForJob } from "@/db/queries/documents";
 import { rfpDocuments } from "@/db/schema";
 import { getJson, putJson, readPrivate, rfpParsedPath } from "@/lib/blob";
 import { parseDocument, type ParsedDocument } from "@/lib/parsing";
+import { failJob } from "@/lib/jobs";
 
 import { documentUploaded, inngest } from "./client";
 
@@ -29,8 +30,8 @@ export const parseUploadedDocument = inngest.createFunction(
     triggers: [documentUploaded],
     onFailure: async ({ event, error }) => {
       const { documentId, jobId } = event.data.event.data;
-      await db.update(rfpDocuments).set({ parseStatus: "failed", parseError: error.message }).where(eq(rfpDocuments.id, documentId));
-      await finishJob(jobId, "failed", error.message);
+      const message = await failJob(jobId, error, { where: "job:parse", documentId });
+      await db.update(rfpDocuments).set({ parseStatus: "failed", parseError: message }).where(eq(rfpDocuments.id, documentId));
     },
   },
   async ({ event, step, runId }) => {

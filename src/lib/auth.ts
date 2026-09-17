@@ -85,9 +85,31 @@ function createAuth() {
   const clientSecret = readSecret("MICROSOFT_CLIENT_SECRET");
   if (!clientSecret) throw new Error(`MICROSOFT_CLIENT_SECRET is not set. ${SSO_HINT}`);
 
+  const baseURL = readEnv("BETTER_AUTH_URL");
+
   return betterAuth({
     database: drizzleAdapter(db, { provider: "pg", schema }),
-    baseURL: readEnv("BETTER_AUTH_URL"),
+    baseURL,
+    // Only the site itself may drive the auth endpoints; anything else is a
+    // cross-site request and is refused.
+    trustedOrigins: baseURL ? [baseURL] : [],
+
+    /**
+     * Better Auth's own limiter, but in the database: the default in-memory
+     * store is per instance, which on Fluid compute means per nothing. Sign-in
+     * is the endpoint worth guarding — a burst there is either a bot or a loop.
+     */
+    rateLimit: {
+      enabled: true,
+      storage: "database",
+      modelName: "rateLimit",
+      window: 60,
+      max: 60,
+      customRules: {
+        "/sign-in/social": { window: 60, max: 10 },
+        "/callback/*": { window: 60, max: 20 },
+      },
+    },
 
     socialProviders: {
       microsoft: {

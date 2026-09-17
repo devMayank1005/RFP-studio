@@ -3,12 +3,15 @@ import { NextResponse } from "next/server";
 import { withOrg } from "@/db/client";
 import { searchWorkspace } from "@/db/queries/search";
 import { EMPTY_SEARCH, isSearchable, SEARCH_LIMITS, type SearchResults } from "@/domain/search";
+import { apiBudget } from "@/lib/rate-limit";
 import { getSession } from "@/lib/session";
 
 /** ⌘K typeahead. A Route Handler answers 401, never redirects; the palette keys TanStack Query on the normalised query. */
 export async function GET(request: Request) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+  const limited = await apiBudget(session, "api:session");
+  if (limited) return limited;
 
   const q = new URL(request.url).searchParams.get("q") ?? "";
   // The transaction pins the tenant, so row-level security backs the explicit filter.

@@ -11,10 +11,10 @@ describe("redactSecrets", () => {
    */
   it("removes an Anthropic key from an SDK error message", () => {
     const message =
-      'Headers.append: "sk-ant-api03-YwhQ76a6mvs1UuLF9zSY1afW6uPPbFj_5MjjdH66eP1fWUzuAKa\n\n# ---- Better Auth ----" is an invalid header value.';
+      'Headers.append: "sk-ant-api03-FAKEfixture0000000000000000000000000000000000000000AA\n\n# ---- Better Auth ----" is an invalid header value.';
     const out = redactSecrets(message);
     expect(out).not.toContain("sk-ant-");
-    expect(out).not.toContain("YwhQ76a6");
+    expect(out).not.toContain("FAKEfixture");
     expect(out).toContain("[redacted]");
     // The diagnosis must survive — that is the whole point of logging it.
     expect(out).toContain("is an invalid header value");

@@ -5,6 +5,8 @@ import { chunkPages } from "@/domain/extraction";
 import { INGEST_CHARS_PER_CHUNK, extractKbEntries } from "@/engine/ingest";
 import { readPrivate } from "@/lib/blob";
 import { parseDocument } from "@/lib/parsing";
+import { redactSecrets } from "@/lib/redact";
+import { reportError } from "@/lib/report";
 
 import { inngest, kbIngestRequested } from "./client";
 
@@ -27,7 +29,9 @@ export const ingestKbSource = inngest.createFunction(
     ],
     triggers: [kbIngestRequested],
     onFailure: async ({ event, error }) => {
-      await finishKbSource(event.data.event.data.sourceId, "failed", { error: error.message });
+      const { sourceId, workspaceId } = event.data.event.data;
+      reportError(error, { where: "job:ingest-kb", sourceId, workspaceId });
+      await finishKbSource(sourceId, "failed", { error: redactSecrets(error.message) });
     },
   },
   async ({ event, step }) => {

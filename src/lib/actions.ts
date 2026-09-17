@@ -6,6 +6,7 @@ import type { ZodType } from "zod";
 import { db } from "@/db/client";
 import { rfps } from "@/db/schema";
 import { can, type Action } from "@/domain/access";
+import { reportError } from "@/lib/report";
 import { requireSession, type AppSession } from "@/lib/session";
 
 /**
@@ -71,6 +72,7 @@ export async function runAction<T>(body: () => Promise<T>): Promise<ActionResult
     return ok(await body());
   } catch (err) {
     if (err instanceof ActionError) return fail(err.message, err.fieldErrors);
+    reportError(err, { where: "action" });
     throw err;
   }
 }

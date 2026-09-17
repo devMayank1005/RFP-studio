@@ -81,7 +81,7 @@ export const quickRequested = eventType("rfp/quick.requested", {
  */
 // Outside a production build (dev server, tsx scripts) events go to the
 // local dev server at :8288 and need no key. INNGEST_DEV=1 forces it.
-const cloudMode = process.env.NODE_ENV === "production" && readEnv("INNGEST_DEV") !== "1";
+export const cloudMode = process.env.NODE_ENV === "production" && readEnv("INNGEST_DEV") !== "1";
 
 export const inngest = new Inngest({
   id: "rfp-studio",
@@ -96,4 +96,16 @@ export const inngest = new Inngest({
  */
 export function jobsConfigError(): string | null {
   return jobRunnerConfigMessage({ cloudMode, hasEventKey: !!readSecret("INNGEST_EVENT_KEY") });
+}
+
+/**
+ * Null when /api/inngest may serve; otherwise why it must refuse. In cloud
+ * mode every request to that route must be signed, and the SDK can only
+ * check a signature if it has the key — without one it would run whatever
+ * arrived. Read per call, like jobsConfigError.
+ */
+export function inngestServeError(): string | null {
+  if (!cloudMode) return null;
+  if (!readSecret("INNGEST_SIGNING_KEY")) return "INNGEST_SIGNING_KEY is missing: /api/inngest refuses to serve unsigned requests. See README › Deploying.";
+  return jobsConfigError();
 }

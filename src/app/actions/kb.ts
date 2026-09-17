@@ -19,11 +19,13 @@ import { kbSourcePath, uploadPrivate } from "@/lib/blob";
 import { promoteResponse } from "@/lib/promote";
 import { requireJobRunner, sendJobEvent } from "@/lib/jobs";
 import { detectKind } from "@/lib/parsing";
+import { requireBudget } from "@/lib/rate-limit";
 
 /** "Add to KB": promote an approved answer into the knowledge base. The work lives in src/lib/promote.ts, shared with Quick Q&A. */
 export async function promoteToKb(rfpId: string, questionId: string): Promise<ActionResult<{ approvedAnswerId: string; canonicalQuestion: string }>> {
   return runAction(async () => {
     const session = await requireCan("kb.promote");
+    await requireBudget(session, "model:user");
     const rfp = await requireRfp(session, rfpId);
     return promoteResponse(session, rfp, z.string().uuid().parse(questionId));
   });
@@ -42,6 +44,7 @@ const saveEntrySchema = kbEntryInputSchema.extend({ id: z.string().uuid().option
 export async function saveKbEntry(input: unknown): Promise<ActionResult<{ id: string; embedded: boolean; warning?: string }>> {
   return runAction(async () => {
     const session = await requireCan("kb.edit");
+    await requireBudget(session, "model:user");
     const { id, ...next } = parseInput(saveEntrySchema, input);
 
     const before = id ? await getKbEntry(session.workspaceId, id) : null;
@@ -108,6 +111,7 @@ export async function setKbEntryActive(id: string, active: boolean): Promise<Act
 export async function updateApprovedAnswer(id: string, input: unknown): Promise<ActionResult<{ id: string; embedded: boolean; warning?: string }>> {
   return runAction(async () => {
     const session = await requireCan("kb.edit");
+    await requireBudget(session, "model:user");
     const answerId = z.string().uuid().parse(id);
     const next = parseInput(approvedAnswerInputSchema, input);
     const before = await getApprovedAnswer(session.workspaceId, answerId);
@@ -176,6 +180,7 @@ const MAX_INGEST_BYTES = 20 * 1024 * 1024;
 export async function ingestKbDocument(formData: FormData): Promise<ActionResult<{ sourceId: string }>> {
   return runAction(async () => {
     const session = await requireCan("kb.edit");
+    await requireBudget(session, "jobs:user");
     if (engineConfigError) throw new ActionError(engineConfigError);
     requireJobRunner();
 
@@ -203,6 +208,7 @@ export async function ingestKbDocument(formData: FormData): Promise<ActionResult
 export async function reingestKbSource(sourceId: string): Promise<ActionResult> {
   return runAction(async () => {
     const session = await requireCan("kb.edit");
+    await requireBudget(session, "jobs:user");
     if (engineConfigError) throw new ActionError(engineConfigError);
     requireJobRunner();
     const source = await getKbSource(session.workspaceId, z.string().uuid().parse(sourceId));

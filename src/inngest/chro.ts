@@ -8,6 +8,7 @@ import { getChroClientContext, getChroSourceRows } from "@/db/queries/chro";
 import { chroQuestions } from "@/db/schema";
 import { assignSortOrders, selectChroSources, type ChroInput } from "@/domain/chro";
 import { generateChroQuestions } from "@/engine/chro";
+import { failJob } from "@/lib/jobs";
 
 import { CHRO_PROMPT_VERSION } from "../../prompts/chro";
 
@@ -30,7 +31,7 @@ export const generateChro = inngest.createFunction(
     ],
     triggers: [chroRequested],
     onFailure: async ({ event, error }) => {
-      await finishJob(event.data.event.data.jobId, "failed", error.message);
+      await failJob(event.data.event.data.jobId, error, { where: "job:chro", rfpId: event.data.event.data.rfpId });
     },
   },
   async ({ event, step, runId }) => {

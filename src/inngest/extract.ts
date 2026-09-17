@@ -7,6 +7,7 @@ import { listDocumentsForJob } from "@/db/queries/documents";
 import { clients, rfps } from "@/db/schema";
 import type { ExtractedQuestion } from "@/domain/extraction";
 import { writeBrief } from "@/engine/brief";
+import { failJob } from "@/lib/jobs";
 
 import { extractRequested, inngest } from "./client";
 import { countChunks, extractParsedDocument, persistExtractedQuestions } from "./extract-shared";
@@ -45,7 +46,7 @@ export const extractQuestions = inngest.createFunction(
     ],
     triggers: [extractRequested],
     onFailure: async ({ event, error }) => {
-      await finishJob(event.data.event.data.jobId, "failed", error.message);
+      await failJob(event.data.event.data.jobId, error, { where: "job:extract", rfpId: event.data.event.data.rfpId });
     },
   },
   async ({ event, step, runId }) => {

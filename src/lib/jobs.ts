@@ -3,6 +3,8 @@ import "server-only";
 import { finishJob } from "@/db/jobs";
 import { inngest, jobsConfigError } from "@/inngest/client";
 import { ActionError } from "@/lib/actions";
+import { redactSecrets } from "@/lib/redact";
+import { reportError } from "@/lib/report";
 
 /** Refuse before writing anything when the job runner cannot receive events. */
 export function requireJobRunner(): void {
@@ -26,4 +28,16 @@ export async function sendJobEvent(payload: SendPayload, opts: { jobId?: string;
     await opts.onFailure?.(reason);
     throw new ActionError(`The background job could not be queued: ${reason}`);
   }
+}
+
+/**
+ * A job that failed for good: the row says why (redacted, capped — the reason
+ * is shown in the UI and must never carry a credential) and the error is
+ * reported. Returns the stored reason so owner rows can say the same thing.
+ */
+export async function failJob(jobId: string, error: unknown, ctx: { where: string; [extra: string]: unknown }): Promise<string> {
+  const message = (redactSecrets(error instanceof Error ? error.message : String(error)) ?? "Unknown error").slice(0, 500);
+  await finishJob(jobId, "failed", message);
+  reportError(error, { ...ctx, jobId });
+  return message;
 }
