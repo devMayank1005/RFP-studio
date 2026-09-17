@@ -84,3 +84,22 @@ export function can(role: Role | string, action: Action): boolean {
   const actions = ROLE_ACTIONS[role as Role];
   return actions ? actions.has(action) : false;
 }
+
+/**
+ * Fixture accounts. `scripts/dev-session.mjs` creates `dev.<role>@rfp-studio.invalid`
+ * users for local verification and the e2e suite, and production shares that
+ * database. They can never sign in (SSO only, and the domain is not allowed),
+ * but real people must not see them either: to a real viewer the team is real
+ * people only; a fixture viewer (the e2e suite) sees everyone.
+ */
+export const FIXTURE_EMAIL_DOMAIN = "rfp-studio.invalid";
+
+export function isFixtureAccount(email: string | null | undefined): boolean {
+  const address = String(email ?? "").trim().toLowerCase();
+  return address.endsWith(`@${FIXTURE_EMAIL_DOMAIN}`);
+}
+
+export function visibleMembers<T extends { email: string }>(members: readonly T[], viewerEmail: string | null | undefined): T[] {
+  if (isFixtureAccount(viewerEmail)) return [...members];
+  return members.filter((m) => !isFixtureAccount(m.email));
+}

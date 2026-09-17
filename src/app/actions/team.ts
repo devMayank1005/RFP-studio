@@ -18,7 +18,7 @@ export async function setMemberRole(userId: string, role: Role): Promise<ActionR
     const session = await requireCan("team.manage");
     const next = z.enum(ROLES).parse(role);
     const target = z.string().min(1).parse(userId);
-    const members = await listMembers(session.workspaceId);
+    const members = await listMembers(session.workspaceId, session.email);
     const check = canChangeRole(members, target, next);
     if (!check.ok) throw new ActionError(check.reason);
     if (check.unchanged) return { userId: target, role: next };

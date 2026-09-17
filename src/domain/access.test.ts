@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isAllowedEmailDomain, parseAllowedDomains } from "./access";
+import { isAllowedEmailDomain, isFixtureAccount, parseAllowedDomains, visibleMembers } from "./access";
 
 const ALLOWED = ["kognozconsulting.com"];
 
@@ -100,5 +100,29 @@ describe("can — CHRO curation", () => {
     for (const role of ROLES) expect(can(role, "chro.curate"), role).toBe(true);
     expect(can("reviewer", "rfp.edit")).toBe(false);
     expect(can("consultant", "rfp.edit")).toBe(true);
+  });
+});
+
+describe("fixture accounts", () => {
+  const people = [
+    { email: "mayank@kognozconsulting.com", role: "admin" },
+    { email: "dev.admin@rfp-studio.invalid", role: "admin" },
+    { email: "dev.consultant@rfp-studio.invalid", role: "consultant" },
+    { email: "angrah.raina@kognozconsulting.com", role: "consultant" },
+  ];
+
+  it("recognises the fixture domain only, case-insensitively", () => {
+    expect(isFixtureAccount("Dev.Admin@RFP-STUDIO.INVALID")).toBe(true);
+    expect(isFixtureAccount("someone@kognozconsulting.com")).toBe(false);
+    expect(isFixtureAccount("rfp-studio.invalid@kognozconsulting.com")).toBe(false);
+    expect(isFixtureAccount(undefined)).toBe(false);
+  });
+
+  it("hides fixtures from a real viewer and keeps the order", () => {
+    expect(visibleMembers(people, "mayank@kognozconsulting.com").map((m) => m.email)).toEqual(["mayank@kognozconsulting.com", "angrah.raina@kognozconsulting.com"]);
+  });
+
+  it("shows everyone to a fixture viewer, so the e2e suite can still change roles", () => {
+    expect(visibleMembers(people, "dev.admin@rfp-studio.invalid")).toHaveLength(4);
   });
 });

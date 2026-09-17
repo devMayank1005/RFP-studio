@@ -204,6 +204,10 @@ reason (and its export, document or KB source row with it); files in Blob storag
 deleted at once, and unreferenced files of live RFPs or KB sources after a day; rate-limit rows older than an
 hour are dropped. `pnpm sweep:preview` prints what the next run would do without doing it.
 
+**Fixture accounts.** `scripts/dev-session.mjs` creates `dev.<role>@rfp-studio.invalid` users for local
+verification and the e2e suite, and production shares the database. They cannot sign in, and Settings → Team
+hides them from real people (`visibleMembers` in `src/domain/access.ts`); only a fixture session sees them.
+
 **Secrets.** `pnpm lint` (so every Vercel build) runs `scripts/secrets-check.mjs`: no env file other than
 `.env.example` may be tracked, and no tracked line may look like an Anthropic, Inngest, Vercel Blob or Neon
 credential or a password inside a connection string. Every new variable goes into `.env.example` with a

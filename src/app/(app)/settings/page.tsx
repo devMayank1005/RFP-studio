@@ -16,7 +16,7 @@ export const metadata: Metadata = { title: "Settings" };
 /** Team and roles, the brand template with a live preview, and the voice guide behind every draft. */
 export default async function SettingsPage({ searchParams }: PageProps<"/settings">) {
   const [session] = await Promise.all([requireSession(), loadSettingsParams(searchParams)]);
-  const [members, brand] = await Promise.all([listMembers(session.workspaceId), getActiveBrand(session.workspaceId)]);
+  const [members, brand] = await Promise.all([listMembers(session.workspaceId, session.email), getActiveBrand(session.workspaceId)]);
   const now = new Date();
   const canManageTeam = can(session.role, "team.manage");
   const canManageSettings = can(session.role, "settings.manage");
