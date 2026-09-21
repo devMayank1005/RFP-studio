@@ -64,6 +64,13 @@
       "when": 1789626697163,
       "tag": "0008_ops_hardening",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1789984017079,
+      "tag": "0009_voice_guide_version",
+      "breakpoints": true
     }
   ]
 }
