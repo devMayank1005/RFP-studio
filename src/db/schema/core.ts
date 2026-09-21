@@ -58,6 +58,16 @@ export const brandTemplates = pgTable(
     footerText: text("footer_text"),
     /** The voice guide the drafting prompt is built from. Editable in Settings. */
     voiceGuide: text("voice_guide"),
+    /**
+     * Optimistic-locking token, bumped on every voice-guide save.
+     *
+     * The guide is one shared block of prose. While only admins could edit it, a
+     * concurrent save was rare enough to ignore; now that consultants and sales can too,
+     * a blind write means the second person silently destroys the first person's
+     * paragraph — no error, no trace, and no way for them to find out. The save is
+     * conditional on this value, so a losing write is reported instead of swallowed.
+     */
+    version: integer("version").notNull().default(1),
     isActive: boolean("is_active").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true })

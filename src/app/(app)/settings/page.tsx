@@ -20,6 +20,10 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
   const now = new Date();
   const canManageTeam = can(session.role, "team.manage");
   const canManageSettings = can(session.role, "settings.manage");
+  // Separate from settings.manage on purpose: the people who notice the voice is wrong
+  // are the ones writing with it, and they should not need workspace admin to fix a
+  // paragraph. The brand template above stays admin-only.
+  const canEditVoice = can(session.role, "voice.edit");
 
   return (
     <>
@@ -41,7 +45,7 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
               canEdit={canManageSettings}
             />
           ),
-          voice: <VoiceForm initial={brand.voiceGuide} canEdit={canManageSettings} />,
+          voice: <VoiceForm initial={brand.voiceGuide} canEdit={canEditVoice} version={brand.version} />,
         }}
       />
     </>

@@ -1,0 +1,13 @@
+-- Optimistic locking for the voice guide (0009).
+--
+-- The guide is a single shared block of prose that opens every draft's system prompt.
+-- While only admins could edit it, two people saving at once was rare enough to live
+-- with. Consultants and sales can edit it now, so it is not: a blind UPDATE means the
+-- second save destroys the first person's paragraph with no error, no warning and no
+-- trace — and they have no way to discover it happened.
+--
+-- With this column the save becomes conditional, and a losing write is reported rather
+-- than swallowed.
+--
+-- Safe to run more than once, and safe on a live table: existing rows all start at 1.
+ALTER TABLE "brand_templates" ADD COLUMN IF NOT EXISTS "version" integer DEFAULT 1 NOT NULL;

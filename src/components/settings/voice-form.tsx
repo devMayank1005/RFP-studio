@@ -26,7 +26,16 @@ import { DRAFT_PROMPT_VERSION } from "../../../prompts/draft";
 import { DEFAULT_VOICE_GUIDE } from "../../../prompts/voice";
 
 /** The first block of every draft's system prompt, editable. Whitespace and bullets matter, so it is set in mono. */
-export function VoiceForm({ initial, canEdit }: { initial: string; canEdit: boolean }) {
+export function VoiceForm({
+  initial,
+  canEdit,
+  version,
+}: {
+  initial: string;
+  canEdit: boolean;
+  /** The version this text was loaded at, sent back so a stale save is refused. */
+  version: number;
+}) {
   const router = useRouter();
   const [text, setText] = useState(initial);
   const [isSaving, startSave] = useTransition();
@@ -37,7 +46,9 @@ export function VoiceForm({ initial, canEdit }: { initial: string; canEdit: bool
   function save() {
     if (!canEdit || pristine) return;
     startSave(async () => {
-      const result = await saveVoiceGuide(text);
+      // The version we loaded travels with the save. If someone else saved first the
+      // server refuses rather than overwriting them, and says so.
+      const result = await saveVoiceGuide(text, version);
       if (!result.ok) return void toast.error(result.error);
       toast.success("Voice guide saved", { description: "The next draft opens with it; existing revisions keep the guide they were written under." });
       router.refresh();
@@ -99,7 +110,7 @@ export function VoiceForm({ initial, canEdit }: { initial: string; canEdit: bool
           </AlertDialog>
         </div>
       )}
-      {!canEdit && <p className="text-2xs text-muted-foreground">Read-only — only admins change the voice guide.</p>}
+      {!canEdit && <p className="text-2xs text-muted-foreground">Read-only — your role cannot edit the voice guide. Admins, consultants and sales can.</p>}
     </div>
   );
 }

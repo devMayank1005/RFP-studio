@@ -126,3 +126,55 @@ describe("fixture accounts", () => {
     expect(visibleMembers(people, "dev.admin@rfp-studio.invalid")).toHaveLength(4);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Editing the voice guide is separate from running the workspace.
+//
+// The voice guide is the prose every draft's system prompt opens with. Before this it
+// sat behind `settings.manage`, which only admin holds — and admin also carries
+// `team.manage`. So the only way to let someone fix a paragraph was to let them remove
+// colleagues and change roles. `voice.edit` exists to break that bundle.
+// ---------------------------------------------------------------------------
+describe("voice.edit", () => {
+  it.each([
+    ["admin", true],
+    ["consultant", true],
+    ["sales", true],
+    ["reviewer", false]
+  ] as const)("%s can edit the voice guide: %s", (role, allowed) => {
+    // Named per role so a failure says which one broke, rather than "the matrix".
+    expect(can(role, "voice.edit")).toBe(allowed);
+  });
+
+  it("does NOT hand consultant or sales the brand template", () => {
+    // The whole point of the split. A careless edit to ROLE_ACTIONS that granted
+    // settings.manage alongside voice.edit would quietly widen who can change the
+    // logo, the colours and the export templates — and this is what would catch it.
+    for (const role of ["consultant", "sales"] as const) {
+      expect(can(role, "voice.edit")).toBe(true);
+      expect(can(role, "settings.manage")).toBe(false);
+      expect(can(role, "team.manage")).toBe(false);
+    }
+  });
+
+  it("leaves every other capability exactly where it was", () => {
+    // Adding an action must not shuffle the rest of the matrix.
+    expect(can("reviewer", "rfp.create")).toBe(false);
+    expect(can("sales", "response.approve")).toBe(false);
+    expect(can("consultant", "team.manage")).toBe(false);
+    expect(can("admin", "team.manage")).toBe(true);
+  });
+
+  it("fails closed for a role that is not a role", () => {
+    // Roles arrive from the database as text. An unknown one must deny, never default.
+    for (const bogus of ["", "owner", "ADMIN", "superuser"]) {
+      expect(can(bogus, "voice.edit")).toBe(false);
+    }
+  });
+
+  it("gives every declared role an explicit verdict", () => {
+    // A role added to ROLES but forgotten in ROLE_ACTIONS would silently deny
+    // everything; this proves each one was actually considered.
+    for (const role of ROLES) expect(typeof can(role, "voice.edit")).toBe("boolean");
+  });
+});

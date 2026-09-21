@@ -28,5 +28,7 @@ export async function getActiveBrand(workspaceId: string) {
     /** Whether the stored guide differs from the built-in default. */
     voiceCustomised: !!row?.voiceGuide?.trim() && row.voiceGuide.trim() !== DEFAULT_VOICE_GUIDE.trim(),
     updatedAt: row?.updatedAt ?? null,
+    /** What a save must present back to prove it edited the current text. */
+    version: row?.version ?? 1,
   };
 }

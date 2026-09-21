@@ -64,19 +64,31 @@ export type Action =
   | "chro.curate"
   | "export.create"
   | "settings.manage"
-  | "team.manage";
+  | "team.manage"
+  /**
+   * Edit the voice guide — the prose every draft's system prompt opens with.
+   *
+   * Deliberately separate from `settings.manage`. The people who notice the voice is
+   * wrong are the ones writing and pitching with it, and making them admins to fix a
+   * paragraph would also hand them the ability to remove colleagues and change roles.
+   * The brand template itself stays under `settings.manage`.
+   */
+  | "voice.edit";
 
 const ROLE_ACTIONS: Record<Role, ReadonlySet<Action>> = {
   admin: new Set<Action>([
     "rfp.create", "rfp.edit", "question.confirm", "response.draft", "response.edit",
     "response.approve", "response.flag", "kb.promote", "kb.edit", "chro.curate", "export.create",
-    "settings.manage", "team.manage",
+    "settings.manage", "team.manage", "voice.edit",
   ]),
   consultant: new Set<Action>([
     "rfp.create", "rfp.edit", "question.confirm", "response.draft", "response.edit",
     "response.approve", "response.flag", "kb.promote", "kb.edit", "chro.curate", "export.create",
+    // Writes and approves the drafts the guide governs, so best placed to notice it is wrong.
+    "voice.edit",
   ]),
-  sales: new Set<Action>(["rfp.create", "rfp.edit", "question.confirm", "response.draft", "response.edit", "response.flag", "chro.curate", "export.create"]),
+  // Client-facing, so they hear how the writing actually lands.
+  sales: new Set<Action>(["rfp.create", "rfp.edit", "question.confirm", "response.draft", "response.edit", "response.flag", "chro.curate", "export.create", "voice.edit"]),
   reviewer: new Set<Action>(["response.edit", "response.approve", "response.flag", "kb.promote", "chro.curate"]),
 };
 
