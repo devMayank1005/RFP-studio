@@ -71,6 +71,7 @@ export function ingestEntrySlug(sourceName: string, featureName: string): string
   return `${kebab(base)}:${kebab(featureName)}`;
 }
 
+/** The user turn for one ingest call: the document name, the features already captured (so a re-run adds rather than repeats), then the pages. */
 export function buildIngestUserMessage(input: { sourceName: string; pages: ReadonlyArray<{ page: number; text: string }>; known: readonly string[] }): string {
   return [
     `DOCUMENT: ${input.sourceName}`,
@@ -134,10 +135,18 @@ export function normalisePrecedents(raw: readonly RawPrecedent[]): Precedent[] {
   return [...byKey.values()];
 }
 
+/** djb2 over the normalised question, so two long questions with the same first 100 characters never share a slug. */
+function shortHash(s: string): string {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0;
+  return h.toString(16).padStart(8, "0");
+}
+
 /** Stable key for a precedent: re-ingesting the same response updates in place instead of duplicating. */
 export function precedentSlug(sourceName: string, question: string): string {
   const base = sourceName.replace(/\.[^.]+$/, "");
-  return `${kebab(base)}:${kebab(questionKey(question)).slice(0, 120)}`;
+  const key = questionKey(question);
+  return `${kebab(base)}:${kebab(key).slice(0, 100)}-${shortHash(key)}`;
 }
 
 /**
@@ -157,6 +166,7 @@ export function sheetPrecedents(sheet: { name: string; headers: string[]; rows: 
   return normalisePrecedents(raw);
 }
 
+/** The user turn for one precedent call: the document name, the questions already captured (so a re-run adds rather than repeats), then the pages. */
 export function buildPrecedentUserMessage(input: { sourceName: string; pages: ReadonlyArray<{ page: number; text: string }>; known: readonly string[] }): string {
   return [
     `DOCUMENT: ${input.sourceName}`,
