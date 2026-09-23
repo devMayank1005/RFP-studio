@@ -185,17 +185,18 @@ export async function ingestKbDocument(formData: FormData): Promise<ActionResult
     requireJobRunner();
 
     const file = formData.get("file");
-    if (!(file instanceof File) || file.size === 0) throw new ActionError("Choose a PDF or DOCX document.");
+    if (!(file instanceof File) || file.size === 0) throw new ActionError("Choose a document to ingest.");
     const kind = z.enum(KB_SOURCE_KINDS).catch("darwinbox_docs").parse(formData.get("kind"));
     const entryType = z.enum(KB_ENTRY_TYPES).catch("darwinbox_capability").parse(formData.get("entryType"));
     const product = z.string().trim().min(2, "Which product is this about?").max(60).parse(String(formData.get("product") ?? "Darwinbox"));
     const detected = detectKind(file.name, file.type);
-    if (detected !== "pdf" && detected !== "docx") throw new ActionError(`${file.name}: only PDF and DOCX documents can be read into the knowledge base.`);
+    if (!detected) throw new ActionError(`${file.name}: upload a PDF, DOCX, PPTX, XLSX, Markdown or text file.`);
+    if (detected === "xlsx" && kind !== "rfp_response") throw new ActionError("A spreadsheet can only be ingested as a past RFP response (its rows become precedents).");
     if (file.size > MAX_INGEST_BYTES) throw new ActionError(`${file.name} is larger than 20 MB.`);
 
     const { url } = await uploadPrivate(kbSourcePath(session.workspaceId, file.name), file, file.type || undefined);
     const sourceId = await upsertKbSource({ workspaceId: session.workspaceId, sourceName: file.name, kind, fileUrl: url, status: "queued" });
-    await sendJobEvent(kbIngestRequested.create({ sourceId, workspaceId: session.workspaceId, sourceName: file.name, fileUrl: url, product, entryType, actorId: session.userId }), {
+    await sendJobEvent(kbIngestRequested.create({ sourceId, workspaceId: session.workspaceId, sourceName: file.name, fileUrl: url, product, entryType, kind, actorId: session.userId }), {
       onFailure: (reason) => finishKbSource(sourceId, "failed", { error: `Not queued: ${reason}` }),
     });
     await writeAudit(db, { workspaceId: session.workspaceId, actorId: session.userId, entity: "kb_source", entityId: sourceId, action: "kb.source_ingest_requested", diff: { fileName: file.name, kind, product, entryType, sizeBytes: file.size } });
@@ -220,7 +221,7 @@ export async function reingestKbSource(sourceId: string): Promise<ActionResult> 
     const entryType = source.dominantType ?? "darwinbox_capability";
     const product = first?.product ?? "Darwinbox";
     await db.update(kbSources).set({ status: "queued", error: null, progressDone: 0, progressTotal: 0 }).where(eq(kbSources.id, source.id));
-    await sendJobEvent(kbIngestRequested.create({ sourceId: source.id, workspaceId: session.workspaceId, sourceName: source.name, fileUrl: source.fileUrl, product, entryType, actorId: session.userId }), {
+    await sendJobEvent(kbIngestRequested.create({ sourceId: source.id, workspaceId: session.workspaceId, sourceName: source.name, fileUrl: source.fileUrl, product, entryType, kind: source.kind, actorId: session.userId }), {
       onFailure: (reason) => finishKbSource(source.id, "failed", { error: `Not queued: ${reason}` }),
     });
     await writeAudit(db, { workspaceId: session.workspaceId, actorId: session.userId, entity: "kb_source", entityId: source.id, action: "kb.source_reingest_requested", diff: { fileName: source.name } });

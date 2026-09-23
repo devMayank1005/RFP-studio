@@ -56,7 +56,7 @@ export function IngestDialog({ variant = "default" }: { variant?: "default" | "o
         <DialogHeader>
           <DialogTitle className="font-heading text-base">Ingest a document</DialogTitle>
           <DialogDescription className="text-ui">
-            A product manual or internal document becomes knowledge-base entries, one per capability, each tagged with this file. Re-ingesting the same file updates them in place.
+            A product manual, a Kognoz deck or a note becomes knowledge-base entries, one per capability or service; a past RFP response (a filled sheet or a proposal) becomes reusable precedents. Re-ingesting the same file updates in place.
           </DialogDescription>
         </DialogHeader>
         <FieldGroup className="gap-4">
@@ -75,9 +75,9 @@ export function IngestDialog({ variant = "default" }: { variant?: "default" | "o
                   {file.name} <span className="num text-2xs text-muted-foreground">· {formatBytes(file.size)}</span>
                 </span>
               ) : (
-                <span className="text-muted-foreground">Choose a PDF or DOCX, up to 20 MB</span>
+                <span className="text-muted-foreground">PDF, DOCX, PPTX, XLSX, Markdown or text, up to 20 MB</span>
               )}
-              <input ref={inputRef} id="ingest-file" type="file" accept=".pdf,.docx" className="sr-only" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+              <input ref={inputRef} id="ingest-file" type="file" accept=".pdf,.docx,.pptx,.xlsx,.md,.markdown,.txt" className="sr-only" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
             </div>
           </Field>
           <div className="grid gap-4 sm:grid-cols-2">

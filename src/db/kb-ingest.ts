@@ -1,11 +1,11 @@
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import { db } from "@/db/client";
-import { kbEntries, kbSources } from "@/db/schema";
+import { approvedAnswers, kbEntries, kbSources } from "@/db/schema";
 import { stableId } from "@/db/seed/ids";
 import type { JobStatus, KbEntryType, KbSourceKind } from "@/domain/enums";
-import { ingestEntrySlug, type IngestEntry } from "@/domain/ingest";
-import { embedDocuments, kbEntryEmbedText } from "@/engine/embed";
+import { ingestEntrySlug, precedentSlug, type IngestEntry, type Precedent } from "@/domain/ingest";
+import { approvedAnswerEmbedText, embedDocuments, kbEntryEmbedText } from "@/engine/embed";
 
 /**
  * Writing an ingested document into the knowledge base — shared by the
@@ -96,5 +96,54 @@ export async function embedPendingForSource(sourceId: string): Promise<number> {
   if (!pending.length) return 0;
   const vectors = await embedDocuments(pending.map(kbEntryEmbedText));
   for (const [i, e] of pending.entries()) await db.update(kbEntries).set({ embedding: vectors[i] }).where(eq(kbEntries.id, e.id));
+  return pending.length;
+}
+
+export function precedentIdFor(workspaceId: string, sourceName: string, question: string): string {
+  return stableId("approved_answer", `${workspaceId}:${precedentSlug(sourceName, question)}`);
+}
+
+/**
+ * Upsert the precedents of one past response as approved answers: no origin
+ * response or RFP (they predate the app), a stable id per source + question so
+ * re-ingesting updates in place, and the embedding nulled when the answer
+ * changed. Returns the ids written so the caller can embed exactly those.
+ */
+export async function writeIngestedPrecedents(input: { workspaceId: string; sourceName: string; precedents: Precedent[] }): Promise<string[]> {
+  if (!input.precedents.length) return [];
+  const rows = input.precedents.map((p) => ({
+    id: precedentIdFor(input.workspaceId, input.sourceName, p.question),
+    workspaceId: input.workspaceId,
+    canonicalQuestion: p.question,
+    canonicalAnswer: p.answer,
+    module: p.module,
+    tags: p.tags,
+  }));
+  await db
+    .insert(approvedAnswers)
+    .values(rows)
+    .onConflictDoUpdate({
+      target: approvedAnswers.id,
+      set: {
+        canonicalQuestion: sql`excluded."canonical_question"`,
+        canonicalAnswer: sql`excluded."canonical_answer"`,
+        module: sql`excluded."module"`,
+        tags: sql`excluded."tags"`,
+        embedding: sql`case when ${approvedAnswers.canonicalAnswer} is distinct from excluded."canonical_answer" or ${approvedAnswers.canonicalQuestion} is distinct from excluded."canonical_question" then null else ${approvedAnswers.embedding} end`,
+      },
+    });
+  return rows.map((r) => r.id);
+}
+
+/** Embed the given approved answers that have no vector yet. Returns how many were embedded. */
+export async function embedPendingAnswers(ids: string[]): Promise<number> {
+  if (!ids.length) return 0;
+  const pending = await db
+    .select({ id: approvedAnswers.id, canonicalQuestion: approvedAnswers.canonicalQuestion, canonicalAnswer: approvedAnswers.canonicalAnswer })
+    .from(approvedAnswers)
+    .where(and(inArray(approvedAnswers.id, ids), isNull(approvedAnswers.embedding)));
+  if (!pending.length) return 0;
+  const vectors = await embedDocuments(pending.map(approvedAnswerEmbedText));
+  for (const [i, a] of pending.entries()) await db.update(approvedAnswers).set({ embedding: vectors[i] }).where(eq(approvedAnswers.id, a.id));
   return pending.length;
 }

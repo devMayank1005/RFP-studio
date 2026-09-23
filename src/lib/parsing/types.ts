@@ -3,8 +3,8 @@
  * happens here; the engine only ever sees this, never a raw file.
  */
 
-/** "text" is a Quick Q&A paste wrapped as pages; parseDocument never produces it. */
-export type ParsedKind = "xlsx" | "pdf" | "docx" | "text";
+/** "text" covers markdown, plain text and Quick Q&A pastes; "pptx" is one page per slide. */
+export type ParsedKind = "xlsx" | "pdf" | "docx" | "pptx" | "text";
 
 export interface ParsedRow {
   /** 1-based row number in the original sheet — it is what the reviewer sees in Excel. */

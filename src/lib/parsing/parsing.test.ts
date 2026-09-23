@@ -116,8 +116,47 @@ describe("parseDocument · dispatch", () => {
   });
 
   it("refuses unknown formats with a typed error", async () => {
-    await expect(parseDocument({ fileName: "notes.txt", mime: "text/plain", buffer: Buffer.from("hi") })).rejects.toBeInstanceOf(
+    await expect(parseDocument({ fileName: "photo.png", mime: "image/png", buffer: Buffer.from("hi") })).rejects.toBeInstanceOf(
       UnsupportedDocumentError,
     );
+  });
+});
+
+describe("parseDocument · text and markdown", () => {
+  it("splits markdown into pages at top-level headings and keeps the text", async () => {
+    const md = "# Kognoz change management\n\nWe run adoption in three waves.\n\n## Wave one\n\nLeadership alignment.\n\n# Payroll\n\nStatutory runs per entity.";
+    const doc = await parseDocument({ fileName: "notes.md", buffer: Buffer.from(md) });
+    expect(doc.kind).toBe("text");
+    expect(doc.pages?.map((p) => p.page)).toEqual([1, 2]);
+    expect(doc.pages?.[0].text).toContain("Wave one");
+    expect(doc.pages?.[1].text).toContain("Statutory runs per entity.");
+    expect(doc.text).toContain("Kognoz change management");
+    expect(doc.stats.pages).toBe(2);
+  });
+
+  it("reads a plain text file without headings as one page", async () => {
+    const doc = await parseDocument({ fileName: "chat.txt", buffer: Buffer.from("Line one.\n\nLine two.") });
+    expect(doc.kind).toBe("text");
+    expect(doc.pages).toHaveLength(1);
+    expect(doc.pages?.[0].text).toBe("Line one.\n\nLine two.");
+  });
+});
+
+describe("parseDocument · pptx", () => {
+  it("reads one page per slide, in slide order, joining the text runs", async () => {
+    const { zipSync, strToU8 } = await import("fflate");
+    const slide = (runs: string[]) => `<?xml version="1.0"?><p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:cSld><p:spTree>${runs.map((r) => `<p:sp><p:txBody><a:p><a:r><a:t>${r}</a:t></a:r></a:p></p:txBody></p:sp>`).join("")}</p:spTree></p:cSld></p:sld>`;
+    const zip = zipSync({
+      "[Content_Types].xml": strToU8("<Types/>"),
+      "ppt/slides/slide10.xml": strToU8(slide(["Tenth slide"])),
+      "ppt/slides/slide1.xml": strToU8(slide(["Kognoz &amp; Darwinbox", "Joint value proposition"])),
+      "ppt/slides/slide2.xml": strToU8(slide(["Implementation in 16 weeks"])),
+    });
+    const doc = await parseDocument({ fileName: "deck.pptx", buffer: Buffer.from(zip) });
+    expect(doc.kind).toBe("pptx");
+    expect(doc.pages?.map((p) => p.page)).toEqual([1, 2, 3]);
+    expect(doc.pages?.[0].text).toBe("Kognoz & Darwinbox\nJoint value proposition");
+    expect(doc.pages?.[2].text).toBe("Tenth slide");
+    expect(doc.stats.pages).toBe(3);
   });
 });

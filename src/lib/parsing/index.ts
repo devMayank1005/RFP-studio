@@ -1,5 +1,7 @@
 import { parseDocx } from "./docx";
 import { parsePdf } from "./pdf";
+import { parsePptx } from "./pptx";
+import { parseText } from "./text";
 import { type ParsedDocument, type ParsedKind, type ParseInput, UnsupportedDocumentError } from "./types";
 import { parseXlsx } from "./xlsx";
 
@@ -10,6 +12,10 @@ const BY_EXTENSION: Record<string, ParsedKind> = {
   xlsm: "xlsx",
   pdf: "pdf",
   docx: "docx",
+  pptx: "pptx",
+  md: "text",
+  markdown: "text",
+  txt: "text",
 };
 
 const BY_MIME: Record<string, ParsedKind> = {
@@ -17,6 +23,9 @@ const BY_MIME: Record<string, ParsedKind> = {
   "application/vnd.ms-excel.sheet.macroenabled.12": "xlsx",
   "application/pdf": "pdf",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation": "pptx",
+  "text/markdown": "text",
+  "text/plain": "text",
 };
 
 /** Which parser a file gets: the extension decides, the mime type breaks ties for anonymous uploads. */
@@ -34,6 +43,10 @@ export async function parseDocument(input: ParseInput): Promise<ParsedDocument> 
       return parsePdf(input.fileName, input.buffer);
     case "docx":
       return parseDocx(input.fileName, input.buffer);
+    case "pptx":
+      return parsePptx(input.fileName, input.buffer);
+    case "text":
+      return parseText(input.fileName, input.buffer);
     default:
       throw new UnsupportedDocumentError(input.fileName, input.mime);
   }

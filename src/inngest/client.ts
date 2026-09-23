@@ -1,7 +1,7 @@
 import { Inngest, eventType } from "inngest";
 import { z } from "zod";
 
-import { EXPORT_FORMATS, KB_ENTRY_TYPES } from "@/domain/enums";
+import { EXPORT_FORMATS, KB_ENTRY_TYPES, KB_SOURCE_KINDS } from "@/domain/enums";
 import { EXPORT_SHAPES } from "@/domain/export";
 import { QUICK_SOURCES } from "@/domain/quick";
 import { jobRunnerConfigMessage } from "@/domain/jobs";
@@ -45,6 +45,8 @@ export const kbIngestRequested = eventType("kb/ingest.requested", {
     fileUrl: z.string(),
     product: z.string(),
     entryType: z.enum(KB_ENTRY_TYPES),
+    /** "rfp_response" sources become precedents (question/answer pairs), everything else becomes entries. */
+    kind: z.enum(KB_SOURCE_KINDS).optional(),
     actorId: z.string(),
   }),
 });
