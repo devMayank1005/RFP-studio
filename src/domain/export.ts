@@ -22,6 +22,7 @@ import {
   type RfpStatus,
 } from "./enums";
 import { guessColumnRoles } from "./extraction";
+import { stripCitationMarkers } from "./drafting";
 
 /**
  * Exports, the pure half. Given an RFP's questions, answers, sources and the
@@ -223,7 +224,7 @@ export function buildExportModel(source: ExportSource, options?: ExportOptions):
         answer = {
           status,
           compliance,
-          text: hidden ? "" : (answerText ?? "").trim(),
+          text: hidden ? "" : stripCitationMarkers(answerText ?? ""),
           openPoints: hidden ? [] : openPoints.filter((p) => p.trim().length > 0),
           sources: hidden ? [] : sources,
           flagReason: flagReason?.trim() || null,

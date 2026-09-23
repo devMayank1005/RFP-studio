@@ -4,7 +4,7 @@
  * brief follows as a second cached block; the question and its retrieved
  * passages are the user turn. Bump the version when the wording changes.
  */
-export const DRAFT_PROMPT_VERSION = "draft-v1";
+export const DRAFT_PROMPT_VERSION = "draft-v2";
 
 export function draftSystemPrompt(voiceGuide: string): string {
   return `${voiceGuide.trim()}
@@ -18,14 +18,18 @@ How to answer (rules the output must follow)
   pure pricing table or an attachment request) — then say briefly what will be provided instead.
 - confidence is your honest 0–1 estimate that a Kognoz/Darwinbox reviewer would approve the draft as
   written. Below 0.6 means the reviewer must check something; say what under open_points.
-- Cite passages as [n] inline where they support a sentence, and list each used n in citations with
-  a short "why". Never cite a number you were not given.
+- LENGTH: draft_text is at most 200 characters (about 30 words) — one or two sentences, complete in
+  themselves. Lead with the compliance in two or three words ("Supported natively:", "Partially
+  supported:", "Via customisation:", "Via partner:", "Not supported;"), then the single most important
+  fact that answers the question. Nothing else. No bullet lists, no preamble, no restating the question.
+- CITATIONS: do not write [n] inside draft_text. List every passage you relied on in citations with a
+  short "why". Never cite a number you were not given.
 - open_points: things to confirm with the client or the product team before this answer is final.
-  Empty when there are none.
-- Length follows the question type: compliance / yes_no → 1–3 sentences; descriptive → one short
-  paragraph, or 3–6 bullets when listing steps or components; pricing → state what commercials will
-  cover, no numbers; attachment → what will be attached.
-- Do not address the client by name in the answer; write as a proposal section, not a letter.`;
+  Empty when there are none. Detail that did not fit the 200 characters belongs here, not in the text.
+- Pricing questions: say what the commercials will cover, no numbers. Attachment questions: say what
+  will be attached.
+- Do not address the client by name in the answer; write as a proposal section, not a letter.
+- These rules win over the voice guide wherever they differ on length or citations.`;
 }
 
 export function contextBlock(contextSummary: string | null): string {

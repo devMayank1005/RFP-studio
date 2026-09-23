@@ -143,7 +143,7 @@ async function draftOne(input: {
     ? (await db.select({ finalText: responseRevisions.finalText }).from(responseRevisions).where(eq(responseRevisions.id, existing.currentRevisionId)).limit(1))[0]
     : null;
 
-  const { draft, usage, model } = await draftResponse({
+  const { draft, usage, model, truncated } = await draftResponse({
     voiceGuide: input.voiceGuide,
     contextSummary: input.contextSummary,
     question: q,
@@ -185,7 +185,7 @@ async function draftOne(input: {
         promptVersion: DRAFT_PROMPT_VERSION,
         instruction: input.instruction,
         openPoints: draft.open_points,
-        usage: { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, cacheReadTokens: usage.cacheReadTokens, cacheWriteTokens: usage.cacheWriteTokens },
+        usage: { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, cacheReadTokens: usage.cacheReadTokens, cacheWriteTokens: usage.cacheWriteTokens, ...(truncated ? { truncated: true } : {}) },
       })
       .returning({ id: responseRevisions.id });
 

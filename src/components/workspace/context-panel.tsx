@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Kbd } from "@/components/ui/kbd";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { ANSWER_MAX_CHARS } from "@/domain/drafting";
 import { CellMenu } from "@/components/wizard/cell-menu";
 import { JobProgress } from "@/components/wizard/job-progress";
 import type { WorkspaceRow } from "@/db/queries/workspace";
@@ -283,7 +284,8 @@ function ResponseEditor({ initial, pending, onSave, onCancel }: { initial: strin
       />
       <div className="flex items-center justify-end gap-2">
         <span className="mr-auto text-2xs text-muted-foreground">
-          <Kbd>⌘</Kbd> <Kbd>Enter</Kbd> saves a new revision
+          <Kbd>⌘</Kbd> <Kbd>Enter</Kbd> saves a new revision ·{" "}
+          <span className={cn("num", value.length > ANSWER_MAX_CHARS && "text-meaning-amber-text")}>{value.length} / {ANSWER_MAX_CHARS}</span>
         </span>
         <Button size="sm" variant="ghost" onClick={onCancel} disabled={pending}>
           Cancel

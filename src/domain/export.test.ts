@@ -136,6 +136,13 @@ describe("buildExportModel", () => {
     expect(model.questions[3].sectionTitle).toBe(OTHER_SECTION_TITLE);
   });
 
+  it("exports answer text without inline citation markers, whatever an older draft left in it", () => {
+    const src = source();
+    src.questions = src.questions.map((x) => (x.id === "a1" ? { ...x, answerText: "Fully compliant [1]. Bank files [2] follow [brief]." } : x));
+    const model = buildExportModel(src);
+    expect(model.questions[0].answer?.text).toBe("Fully compliant. Bank files follow.");
+  });
+
   it("resolves citation titles with a fallback per source type", () => {
     const model = buildExportModel(source());
     expect(model.questions[0].answer?.sources).toEqual([

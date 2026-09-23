@@ -67,7 +67,8 @@ export const responseRevisions = pgTable(
     /** "regenerate: shorter / more formal / cite the SAP migration" — saved with the revision. */
     instruction: text("instruction"),
     openPoints: jsonb("open_points").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
-    usage: jsonb("usage").$type<Record<string, number>>(),
+    /** Token counts from the model call(s), plus `truncated: true` when the answer had to be cut to fit ANSWER_MAX_CHARS. */
+    usage: jsonb("usage").$type<Record<string, number | boolean>>(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [uniqueIndex("response_revisions_version_uidx").on(t.responseId, t.version)],
