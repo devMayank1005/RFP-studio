@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { isStaleQueuedJob, jobRunnerConfigMessage, STALE_QUEUE_MS } from "./jobs";
+import { isStaleQueuedJob, jobRunnerConfigMessage, progressLabel, STALE_QUEUE_MS } from "./jobs";
 
 /**
  * Background jobs go through Inngest. Locally the dev server needs no key;
@@ -27,5 +27,18 @@ describe("isStaleQueuedJob", () => {
     expect(isStaleQueuedJob({ status: "queued", createdAt: "2026-09-16T09:58:00Z" }, now)).toBe(false);
     expect(isStaleQueuedJob({ status: "running", createdAt: "2026-09-16T09:00:00Z" }, now)).toBe(false);
     expect(isStaleQueuedJob(null, now)).toBe(false);
+  });
+});
+
+describe("progressLabel", () => {
+  it("never shows more done than the total, so a retried step cannot print 33 / 20", () => {
+    expect(progressLabel(33, 20)).toBe("20 / 20");
+    expect(progressLabel(3, 20)).toBe("3 / 20");
+    expect(progressLabel(20, 20)).toBe("20 / 20");
+  });
+
+  it("is empty while the total is still unknown", () => {
+    expect(progressLabel(0, 0)).toBe("");
+    expect(progressLabel(5, 0)).toBe("");
   });
 });

@@ -5,6 +5,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
+import { progressLabel } from "@/domain/jobs";
 import { useJob } from "@/hooks/use-job";
 import { cn } from "@/lib/utils";
 
@@ -62,7 +63,7 @@ export function JobProgress({
           {failed && job?.error && <p className="mt-1 text-2xs text-meaning-red-text">{job.error}</p>}
         </div>
         <span className="num shrink-0 text-2xs text-muted-foreground">
-          {total ? `${done} / ${total}` : job?.status === "queued" ? "queued" : ""}
+          {progressLabel(done, total) || (job?.status === "queued" ? "queued" : "")}
         </span>
       </div>
       <div className="h-1.5 w-full overflow-hidden rounded-full bg-meaning-teal-bg" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}>

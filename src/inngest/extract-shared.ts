@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 
 import type { Db } from "@/db/client";
 import { rfpQuestions, rfpSections, rfps } from "@/db/schema";
-import { chunk, chunkPages, type ExtractedQuestion } from "@/domain/extraction";
+import { NARRATIVE_CHARS_PER_CHUNK, ROWS_PER_CHUNK, chunk, chunkPages, type ExtractedQuestion } from "@/domain/extraction";
 import { resolveColumns } from "@/engine/columns";
 import { extractFromPages, extractFromSheet } from "@/engine/extract";
 import type { ParsedDocument } from "@/lib/parsing";
@@ -12,14 +12,15 @@ import type { ParsedDocument } from "@/lib/parsing";
  * document into questions, and writing questions + sections for an RFP.
  */
 
-export const ROWS_PER_CHUNK = 40;
+export { NARRATIVE_CHARS_PER_CHUNK, ROWS_PER_CHUNK };
+/** A sheet with fewer rows is a cover page or a legend, not a requirements list. */
 export const MIN_ROWS_FOR_A_SHEET = 3;
 
 /** How many model calls a document costs — the job's progress total. */
 export function countChunks(doc: ParsedDocument): number {
   return doc.kind === "xlsx"
     ? (doc.sheets ?? []).filter((s) => s.rows.length >= MIN_ROWS_FOR_A_SHEET).reduce((n, s) => n + chunk(s.rows, ROWS_PER_CHUNK).length, 0)
-    : chunkPages(doc.pages ?? [], 6_000).length;
+    : chunkPages(doc.pages ?? [], NARRATIVE_CHARS_PER_CHUNK).length;
 }
 
 export interface DocumentExtraction {

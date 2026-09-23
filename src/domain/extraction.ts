@@ -127,6 +127,21 @@ export function generateRefNo(index: number, existing?: string | null): string {
   return `R-${String(index + 1).padStart(3, "0")}`;
 }
 
+/** Rows per model call. Also the unit of durable work: one Inngest step per chunk. */
+export const ROWS_PER_CHUNK = 40;
+/** Characters of narrative text per model call. */
+export const NARRATIVE_CHARS_PER_CHUNK = 6_000;
+
+/** Known section titles plus any new ones, in first-seen order, case-insensitively unique. */
+export function mergeSectionTitles(known: readonly string[], titles: Iterable<string>): string[] {
+  const out = [...known];
+  for (const raw of titles) {
+    const title = normaliseSectionTitle(raw);
+    if (!out.some((s) => s.toLowerCase() === title.toLowerCase())) out.push(title);
+  }
+  return out;
+}
+
 export function chunk<T>(items: T[], size: number): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
@@ -215,4 +230,74 @@ export interface ExtractedQuestion {
   rawMeta: Record<string, string>;
   /** A vendor's earlier answer found in the sheet, if the columns carried one. */
   existing: { compliance: Compliance | null; answer: string | null; questions: string | null } | null;
+}
+
+/** A sheet row as the parser hands it over; kept structural so this module stays free of I/O imports. */
+export interface SheetRowLike {
+  /** 1-based row number in the original sheet. */
+  row: number;
+  cells: Record<string, string>;
+}
+
+/** The rows that carry a question at all — blank question cells are headings, spacers or notes. */
+export function sheetCandidates<R extends SheetRowLike>(sheet: { rows: R[] }, questionCol: string): R[] {
+  return sheet.rows.filter((r) => (r.cells[questionCol] ?? "").trim().length > 0);
+}
+
+/**
+ * Turns one chunk's model classification back into questions.
+ *
+ * Pure so that the extract job can run one chunk per durable step: the
+ * engine makes the call, this decides what the answer means. The requirement
+ * text is copied verbatim from the client's cell — never rewritten — and
+ * every column of the row is kept in rawMeta. A row the model did not return
+ * is still a question, defaulted rather than dropped. `startIndex` continues
+ * the generated ref numbering across chunks and documents, so R-041 follows
+ * R-040 instead of every chunk restarting at R-001.
+ */
+export function assembleSheetQuestions(input: {
+  candidates: SheetRowLike[];
+  modelRows: SheetExtraction["rows"];
+  map: ColumnMap;
+  knownSections: readonly string[];
+  startIndex: number;
+}): { questions: ExtractedQuestion[]; sections: string[] } {
+  const { candidates, modelRows, map, startIndex } = input;
+  if (!map.question) throw new Error("column map has no question column");
+  const questionCol = map.question;
+
+  const sections = mergeSectionTitles(input.knownSections, modelRows.map((r) => r.section_title));
+  const classified = new Map<number, SheetExtraction["rows"][number]>();
+  for (const row of modelRows) classified.set(row.source_row, { ...row, section_title: normaliseSectionTitle(row.section_title) });
+
+  const questions: ExtractedQuestion[] = [];
+  let index = startIndex;
+  for (const r of candidates) {
+    const c = classified.get(r.row);
+    if (c && !c.is_question) continue;
+    const sectionFromSheet = map.section ? normaliseSectionTitle(r.cells[map.section]) : null;
+    questions.push({
+      sourceRow: r.row,
+      sourcePage: null,
+      refNo: generateRefNo(index, map.refNo ? r.cells[map.refNo] : null),
+      sectionTitle: c?.section_title ?? sectionFromSheet ?? "General",
+      questionText: r.cells[questionCol].trim(),
+      acceptanceCriteria: map.acceptanceCriteria ? (r.cells[map.acceptanceCriteria]?.trim() ?? null) : null,
+      questionType: c?.question_type ?? "descriptive",
+      isMandatory: mapPriority(map.priority ? r.cells[map.priority] : null),
+      owner: c?.owner_guess && c.owner_guess !== "not_applicable" ? c.owner_guess : "joint",
+      moduleHint: c?.module_hint ?? "general",
+      rawMeta: { ...r.cells },
+      existing:
+        map.existingCompliance || map.existingAnswer || map.existingQuestions
+          ? {
+              compliance: mapExistingCompliance(map.existingCompliance ? r.cells[map.existingCompliance] : null),
+              answer: map.existingAnswer ? (r.cells[map.existingAnswer]?.trim() ?? null) : null,
+              questions: map.existingQuestions ? (r.cells[map.existingQuestions]?.trim() ?? null) : null,
+            }
+          : null,
+    });
+    index++;
+  }
+  return { questions, sections };
 }

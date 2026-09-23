@@ -1,16 +1,20 @@
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 
 import {
+  NARRATIVE_CHARS_PER_CHUNK,
+  ROWS_PER_CHUNK,
+  assembleSheetQuestions,
   chunk,
   chunkPages,
   generateRefNo,
-  mapExistingCompliance,
-  mapPriority,
+  mergeSectionTitles,
   narrativeExtractionSchema,
   normaliseSectionTitle,
+  sheetCandidates,
   sheetExtractionSchema,
   type ColumnMap,
   type ExtractedQuestion,
+  type SheetExtraction,
 } from "@/domain/extraction";
 import type { ParsedPage, ParsedSheet } from "@/lib/parsing";
 
@@ -34,11 +38,18 @@ export interface ExtractOptions {
   /** Sections already known for this RFP (from earlier documents), so titles stay consistent. */
   knownSections?: string[];
   rowsPerChunk?: number;
+  /** Where generated ref numbers continue from, so chunks and documents never both produce R-001. */
+  startIndex?: number;
   onProgress?: (done: number, total: number) => void | Promise<void>;
 }
 
-const ROWS_PER_CHUNK = 40;
-const NARRATIVE_CHARS_PER_CHUNK = 6_000;
+/**
+ * Every call here runs inside one Inngest step, which is one Vercel
+ * invocation — capped at 300 s on the Hobby plan, with no way to raise it.
+ * The SDK's defaults (600 s, two retries) could blow through that on their
+ * own; two attempts of 120 s cannot.
+ */
+const REQUEST_OPTIONS = { timeout: 120_000, maxRetries: 1 } as const;
 
 /**
  * A spreadsheet row is already a question; the model only classifies it.
@@ -49,10 +60,10 @@ export async function extractFromSheet(sheet: ParsedSheet, map: ColumnMap, opts:
   if (!map.question) throw new Error(`sheet "${sheet.name}" has no question column`);
   const questionCol = map.question;
 
-  const candidates = sheet.rows.filter((r) => (r.cells[questionCol] ?? "").trim().length > 0);
+  const candidates = sheetCandidates(sheet, questionCol);
   const chunks = chunk(candidates, opts.rowsPerChunk ?? ROWS_PER_CHUNK);
-  const knownSections = [...(opts.knownSections ?? [])];
-  const classified = new Map<number, { is_question: boolean; section_title: string; question_type: ExtractedQuestion["questionType"]; module_hint: ExtractedQuestion["moduleHint"]; owner_guess: ExtractedQuestion["owner"] }>();
+  let knownSections = [...(opts.knownSections ?? [])];
+  const modelRows: SheetExtraction["rows"] = [];
   let usage = ZERO_USAGE;
 
   for (const [i, rows] of chunks.entries()) {
@@ -64,85 +75,60 @@ export async function extractFromSheet(sheet: ParsedSheet, map: ColumnMap, opts:
       return { source_row: r.row, text: r.cells[questionCol], ...(Object.keys(extra).length ? { extra } : {}) };
     });
 
-    const response = await client.messages.parse({
-      model: EXTRACT_MODEL,
-      max_tokens: 16_000,
-      system: [{ type: "text", text: EXTRACT_SHEET_SYS, cache_control: { type: "ephemeral" } }],
-      messages: [{ role: "user", content: sheetChunkUserMessage(payload, knownSections) }],
-      output_config: { format: zodOutputFormat(sheetExtractionSchema), effort: "medium" },
-    });
+    const response = await client.messages.parse(
+      {
+        model: EXTRACT_MODEL,
+        max_tokens: 16_000,
+        system: [{ type: "text", text: EXTRACT_SHEET_SYS, cache_control: { type: "ephemeral" } }],
+        messages: [{ role: "user", content: sheetChunkUserMessage(payload, knownSections) }],
+        output_config: { format: zodOutputFormat(sheetExtractionSchema), effort: "medium" },
+      },
+      REQUEST_OPTIONS,
+    );
     usage = addUsage(usage, readUsage(response.usage));
     const parsed = response.parsed_output;
     if (!parsed) throw new Error(`extraction chunk ${i + 1}/${chunks.length} returned no parseable output`);
 
-    for (const row of parsed.rows) {
-      const title = normaliseSectionTitle(row.section_title);
-      if (!knownSections.some((s) => s.toLowerCase() === title.toLowerCase())) knownSections.push(title);
-      classified.set(row.source_row, { ...row, section_title: title });
-    }
+    // Titles found in this chunk are known to the next one's prompt.
+    knownSections = mergeSectionTitles(knownSections, parsed.rows.map((r) => r.section_title));
+    modelRows.push(...parsed.rows);
     await opts.onProgress?.(i + 1, chunks.length);
   }
 
-  const questions: ExtractedQuestion[] = [];
-  let index = 0;
-  for (const r of candidates) {
-    const c = classified.get(r.row);
-    // A row the model did not return is still a question — default it rather than drop it.
-    if (c && !c.is_question) continue;
-    const sectionFromSheet = map.section ? normaliseSectionTitle(r.cells[map.section]) : null;
-    questions.push({
-      sourceRow: r.row,
-      sourcePage: null,
-      refNo: generateRefNo(index, map.refNo ? r.cells[map.refNo] : null),
-      sectionTitle: c?.section_title ?? sectionFromSheet ?? "General",
-      questionText: r.cells[questionCol].trim(),
-      acceptanceCriteria: map.acceptanceCriteria ? (r.cells[map.acceptanceCriteria]?.trim() ?? null) : null,
-      questionType: c?.question_type ?? "descriptive",
-      isMandatory: mapPriority(map.priority ? r.cells[map.priority] : null),
-      owner: c?.owner_guess && c.owner_guess !== "not_applicable" ? c.owner_guess : "joint",
-      moduleHint: c?.module_hint ?? "general",
-      rawMeta: { ...r.cells },
-      existing:
-        map.existingCompliance || map.existingAnswer || map.existingQuestions
-          ? {
-              compliance: mapExistingCompliance(map.existingCompliance ? r.cells[map.existingCompliance] : null),
-              answer: map.existingAnswer ? (r.cells[map.existingAnswer]?.trim() ?? null) : null,
-              questions: map.existingQuestions ? (r.cells[map.existingQuestions]?.trim() ?? null) : null,
-            }
-          : null,
-    });
-    index++;
-  }
-
-  return { questions, sections: knownSections, usage, calls: chunks.length };
+  const { questions, sections } = assembleSheetQuestions({ candidates, modelRows, map, knownSections: opts.knownSections ?? [], startIndex: opts.startIndex ?? 0 });
+  return { questions, sections, usage, calls: chunks.length };
 }
 
 /** Narrative documents: the model finds the questions itself, page-chunked. */
 export async function extractFromPages(pages: ParsedPage[], opts: ExtractOptions = {}): Promise<ExtractionResult> {
   const chunks = chunkPages(pages, NARRATIVE_CHARS_PER_CHUNK);
-  const knownSections = [...(opts.knownSections ?? [])];
+  let knownSections = [...(opts.knownSections ?? [])];
   const questions: ExtractedQuestion[] = [];
+  const startIndex = opts.startIndex ?? 0;
   let usage = ZERO_USAGE;
 
   for (const [i, pageChunk] of chunks.entries()) {
-    const response = await client.messages.parse({
-      model: EXTRACT_MODEL,
-      max_tokens: 16_000,
-      system: [{ type: "text", text: EXTRACT_NARRATIVE_SYS, cache_control: { type: "ephemeral" } }],
-      messages: [{ role: "user", content: narrativeChunkUserMessage(pageChunk, knownSections) }],
-      output_config: { format: zodOutputFormat(narrativeExtractionSchema), effort: "medium" },
-    });
+    const response = await client.messages.parse(
+      {
+        model: EXTRACT_MODEL,
+        max_tokens: 16_000,
+        system: [{ type: "text", text: EXTRACT_NARRATIVE_SYS, cache_control: { type: "ephemeral" } }],
+        messages: [{ role: "user", content: narrativeChunkUserMessage(pageChunk, knownSections) }],
+        output_config: { format: zodOutputFormat(narrativeExtractionSchema), effort: "medium" },
+      },
+      REQUEST_OPTIONS,
+    );
     usage = addUsage(usage, readUsage(response.usage));
     const parsed = response.parsed_output;
     if (!parsed) throw new Error(`narrative extraction chunk ${i + 1}/${chunks.length} returned no parseable output`);
 
     for (const q of parsed.questions) {
       const title = normaliseSectionTitle(q.section_title);
-      if (!knownSections.some((s) => s.toLowerCase() === title.toLowerCase())) knownSections.push(title);
+      knownSections = mergeSectionTitles(knownSections, [title]);
       questions.push({
         sourceRow: null,
         sourcePage: q.source_page,
-        refNo: generateRefNo(questions.length, q.ref_no),
+        refNo: generateRefNo(startIndex + questions.length, q.ref_no),
         sectionTitle: title,
         questionText: q.question_text.trim(),
         acceptanceCriteria: null,

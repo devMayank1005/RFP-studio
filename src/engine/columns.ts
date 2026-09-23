@@ -39,7 +39,9 @@ export async function resolveColumns(sheet: ParsedSheet): Promise<ResolvedColumn
     system: [{ type: "text", text: CLASSIFY_SYS, cache_control: { type: "ephemeral" } }],
     messages: [{ role: "user", content: classifyUserMessage(sheet.headers, sample) }],
     output_config: { format: zodOutputFormat(columnClassificationSchema), effort: "low" },
-  });
+  },
+  // Runs inside one Inngest step, i.e. one Vercel invocation capped at 300 s on the Hobby plan.
+  { timeout: 60_000, maxRetries: 1 });
   const parsed = response.parsed_output;
   if (!parsed) throw new Error("column classification returned no parseable output");
 

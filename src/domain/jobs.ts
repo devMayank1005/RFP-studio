@@ -16,3 +16,14 @@ export function jobRunnerConfigMessage(input: { cloudMode: boolean; hasEventKey:
   if (!input.cloudMode || input.hasEventKey) return null;
   return "Background jobs are not configured on this server: INNGEST_EVENT_KEY is missing, so uploads, extraction, drafting and CHRO generation cannot run. See README › Deploying.";
 }
+
+/**
+ * The "n / total" a progress card shows. Clamped: a durable step that was
+ * retried after its progress write had already landed must never read as
+ * more work done than exists ("33 / 20" happened). Empty until the total is
+ * known — a queued job has nothing honest to count yet.
+ */
+export function progressLabel(done: number, total: number): string {
+  if (total <= 0) return "";
+  return `${Math.min(done, total)} / ${total}`;
+}

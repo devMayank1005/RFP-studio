@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  assembleSheetQuestions,
   chunk,
   chunkPages,
   columnMapFromRoles,
@@ -9,8 +10,10 @@ import {
   mapExistingCompliance,
   mapPriority,
   normaliseSectionTitle,
+  sheetCandidates,
   sheetExtractionSchema,
   narrativeExtractionSchema,
+  type SheetRowLike,
 } from "./extraction";
 
 describe("guessColumnRoles", () => {
@@ -151,5 +154,55 @@ describe("output schemas", () => {
       ],
     });
     expect(ok.success).toBe(true);
+  });
+});
+
+describe("sheetCandidates", () => {
+  it("keeps only rows with something in the question cell, with their original row numbers", () => {
+    const rows: SheetRowLike[] = [
+      { row: 4, cells: { Requirement: "Leave accrual rules", Priority: "Must" } },
+      { row: 5, cells: { Priority: "Must" } },
+      { row: 6, cells: { Requirement: "   " } },
+      { row: 9, cells: { Requirement: "Payroll runs", Priority: "Should" } },
+    ];
+    expect(sheetCandidates({ rows }, "Requirement").map((r) => r.row)).toEqual([4, 9]);
+  });
+});
+
+describe("assembleSheetQuestions", () => {
+  const map = { ...columnMapFromRoles(guessColumnRoles(["Requirement", "Section", "Priority"])), hasQuestion: true };
+  const candidates: SheetRowLike[] = [
+    { row: 4, cells: { Requirement: "Leave accrual rules", Section: "Leave", Priority: "Must" } },
+    { row: 5, cells: { Requirement: "Ignore this heading row", Section: "Leave" } },
+    { row: 9, cells: { Requirement: "Payroll runs", Section: "Payroll", Priority: "Should" } },
+  ];
+  const modelRows = [
+    { source_row: 4, is_question: true, section_title: "Leave management", question_type: "descriptive", module_hint: "leave", owner_guess: "darwinbox" },
+    // Same section, different case: must not become a second section.
+    { source_row: 5, is_question: false, section_title: "leave management", question_type: "descriptive", module_hint: "leave", owner_guess: "not_applicable" },
+  ] as const;
+
+  it("numbers generated refs from startIndex so chunks and documents never collide", () => {
+    const { questions } = assembleSheetQuestions({ candidates, modelRows: [...modelRows], map, knownSections: [], startIndex: 40 });
+    expect(questions.map((q) => q.refNo)).toEqual(["R-041", "R-042"]);
+  });
+
+  it("skips rows the model says are not questions, without consuming a ref", () => {
+    const { questions } = assembleSheetQuestions({ candidates, modelRows: [...modelRows], map, knownSections: [], startIndex: 0 });
+    expect(questions.map((q) => q.sourceRow)).toEqual([4, 9]);
+    expect(questions[0]).toMatchObject({ refNo: "R-001", sectionTitle: "Leave management", questionType: "descriptive", moduleHint: "leave", owner: "darwinbox", isMandatory: true });
+  });
+
+  it("defaults a row the model did not return instead of dropping it", () => {
+    const { questions } = assembleSheetQuestions({ candidates, modelRows: [...modelRows], map, knownSections: [], startIndex: 0 });
+    expect(questions[1]).toMatchObject({ sourceRow: 9, sectionTitle: "Payroll", questionType: "descriptive", owner: "joint", moduleHint: "general", isMandatory: false });
+  });
+
+  it("keeps the client's own ref verbatim and appends new sections after the known ones", () => {
+    const withRef = { ...map, refNo: "Ref" };
+    const rows = candidates.map((c) => ({ ...c, cells: { ...c.cells, Ref: `T-${c.row}` } }));
+    const { questions, sections } = assembleSheetQuestions({ candidates: rows, modelRows: [...modelRows], map: withRef, knownSections: ["General"], startIndex: 10 });
+    expect(questions.map((q) => q.refNo)).toEqual(["T-4", "T-9"]);
+    expect(sections).toEqual(["General", "Leave management"]);
   });
 });
