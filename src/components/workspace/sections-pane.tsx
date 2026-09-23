@@ -3,19 +3,9 @@
 import { Chip } from "@/components/chips/chips";
 import { COMPLIANCE_TONE, RESPONSE_STATUS_TONE } from "@/components/chips/chips";
 import type { WorkspaceRow, WorkspaceSection } from "@/db/queries/workspace";
-import { COMPLIANCE_LABEL, COMPLIANCE_LEVELS, OWNERS, OWNER_LABEL, RESPONSE_STATUSES, RESPONSE_STATUS_LABEL, type Compliance, type Owner, type ResponseStatus } from "@/domain/enums";
+import { COMPLIANCE_LABEL, OWNER_LABEL, RESPONSE_STATUS_LABEL } from "@/domain/enums";
+import { FACET_VALUES, facetCounts, toggleFacet, type FacetKey, type WorkspaceFilters } from "@/domain/workspace-filters";
 import { cn } from "@/lib/utils";
-
-export interface Filters {
-  status: Array<ResponseStatus | "undrafted">;
-  owner: Owner[];
-  compliance: Compliance[];
-  section: string;
-}
-
-function toggle<T>(list: T[], v: T): T[] {
-  return list.includes(v) ? list.filter((x) => x !== v) : [...list, v];
-}
 
 /** Left pane: sections with approval counts, then the filter facets. Everything here is one click and one URL change. */
 export function SectionsPane({
@@ -26,8 +16,8 @@ export function SectionsPane({
 }: {
   rows: WorkspaceRow[];
   sections: WorkspaceSection[];
-  filters: Filters;
-  onChange: (next: Partial<Filters>) => void;
+  filters: WorkspaceFilters;
+  onChange: (next: Partial<WorkspaceFilters>) => void;
 }) {
   const bySection = new Map<string | null, { total: number; approved: number }>();
   for (const r of rows) {
@@ -37,7 +27,9 @@ export function SectionsPane({
     bySection.set(r.sectionId, s);
   }
   const unsectioned = bySection.get(null);
-  const count = (pred: (r: WorkspaceRow) => boolean) => rows.filter(pred).length;
+  // Each number answers "what would I see if I clicked this": the other groups apply, the facet's own selection does not.
+  const counts = { status: facetCounts(rows, filters, "status"), compliance: facetCounts(rows, filters, "compliance"), owner: facetCounts(rows, filters, "owner") };
+  const facetProps = (key: Exclude<FacetKey, "module">) => ({ facet: key, selected: filters[key].length, total: FACET_VALUES[key].length, onClear: () => onChange({ [key]: [] }) });
 
   return (
     <div className="flex h-full flex-col overflow-y-auto scrollbar-thin">
@@ -51,30 +43,25 @@ export function SectionsPane({
         {unsectioned && <SectionButton active={filters.section === "none"} title="Unsectioned" total={unsectioned.total} approved={unsectioned.approved} onClick={() => onChange({ section: filters.section === "none" ? "" : "none" })} />}
       </nav>
 
-      <Facet title="Status">
-        {(["undrafted", ...RESPONSE_STATUSES] as const).map((s) => (
-          <FacetRow
-            key={s}
-            active={filters.status.includes(s)}
-            onClick={() => onChange({ status: toggle(filters.status, s) })}
-            count={count((r) => (s === "undrafted" ? r.status === null : r.status === s))}
-          >
+      <Facet title="Status" {...facetProps("status")}>
+        {FACET_VALUES.status.map((s) => (
+          <FacetRow key={s} value={s} active={filters.status.includes(s)} onClick={() => onChange({ status: toggleFacet(filters.status, s, FACET_VALUES.status) })} count={counts.status[s]}>
             {s === "undrafted" ? <Chip tone="outline">Not drafted</Chip> : <Chip tone={RESPONSE_STATUS_TONE[s]} dot>{RESPONSE_STATUS_LABEL[s]}</Chip>}
           </FacetRow>
         ))}
       </Facet>
 
-      <Facet title="Compliance">
-        {COMPLIANCE_LEVELS.map((c) => (
-          <FacetRow key={c} active={filters.compliance.includes(c)} onClick={() => onChange({ compliance: toggle(filters.compliance, c) })} count={count((r) => r.compliance === c)}>
+      <Facet title="Compliance" {...facetProps("compliance")}>
+        {FACET_VALUES.compliance.map((c) => (
+          <FacetRow key={c} value={c} active={filters.compliance.includes(c)} onClick={() => onChange({ compliance: toggleFacet(filters.compliance, c, FACET_VALUES.compliance) })} count={counts.compliance[c]}>
             <Chip tone={COMPLIANCE_TONE[c]}>{COMPLIANCE_LABEL[c]}</Chip>
           </FacetRow>
         ))}
       </Facet>
 
-      <Facet title="Owner">
-        {OWNERS.map((o) => (
-          <FacetRow key={o} active={filters.owner.includes(o)} onClick={() => onChange({ owner: toggle(filters.owner, o) })} count={count((r) => r.owner === o)}>
+      <Facet title="Owner" {...facetProps("owner")}>
+        {FACET_VALUES.owner.map((o) => (
+          <FacetRow key={o} value={o} active={filters.owner.includes(o)} onClick={() => onChange({ owner: toggleFacet(filters.owner, o, FACET_VALUES.owner) })} count={counts.owner[o]}>
             <span className="text-ui">{OWNER_LABEL[o]}</span>
           </FacetRow>
         ))}
@@ -108,19 +95,30 @@ function SectionButton({ active, title, total, approved, onClick }: { active: bo
   );
 }
 
-function Facet({ title, children }: { title: string; children: React.ReactNode }) {
+/** A facet group. Nothing selected means everything — the header says so, and "Clear" takes a narrowed group back there. */
+function Facet({ title, facet, selected, total, onClear, children }: { title: string; facet: FacetKey; selected: number; total: number; onClear: () => void; children: React.ReactNode }) {
   return (
-    <div className="mt-3 border-t pt-2">
-      <div className="px-3 pb-1 text-2xs font-medium uppercase tracking-[0.12em] text-muted-foreground">{title}</div>
+    <div className="mt-3 border-t pt-2" data-facet={facet}>
+      <div className="flex items-center justify-between px-3 pb-1">
+        <span className="text-2xs font-medium uppercase tracking-[0.12em] text-muted-foreground">{title}</span>
+        {selected ? (
+          <button type="button" onClick={onClear} className="text-2xs text-brand-blue hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <span className="num">{selected} of {total}</span> · Clear
+          </button>
+        ) : (
+          <span className="text-2xs text-muted-foreground">All</span>
+        )}
+      </div>
       <div className="px-1.5">{children}</div>
     </div>
   );
 }
 
-function FacetRow({ active, onClick, count, children }: { active: boolean; onClick: () => void; count: number; children: React.ReactNode }) {
+function FacetRow({ value, active, onClick, count, children }: { value: string; active: boolean; onClick: () => void; count: number; children: React.ReactNode }) {
   return (
     <button
       type="button"
+      data-value={value}
       onClick={onClick}
       aria-pressed={active}
       className={cn(

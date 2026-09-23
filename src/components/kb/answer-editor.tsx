@@ -31,6 +31,7 @@ import { Textarea } from "@/components/ui/textarea";
 import type { ApprovedAnswerRow } from "@/db/queries/kb";
 import { timeAgo } from "@/domain/dates";
 import { MODULES, MODULE_LABEL, type Module } from "@/domain/enums";
+import { workspaceHref } from "@/components/workspace/params";
 
 import { kbParsers } from "./params";
 
@@ -116,7 +117,7 @@ function AnswerForm({ answer, canEdit, now, onClose }: { answer: ApprovedAnswerR
           {answer.originRfpId && answer.originRfpTitle && (
             <span className="mt-1 block">
               Promoted from{" "}
-              <Link href={answer.originQuestionId ? `/rfps/${answer.originRfpId}/workspace?row=${answer.originQuestionId}` : `/rfps/${answer.originRfpId}/workspace`} className="text-brand-blue hover:underline dark:text-sidebar-primary">
+              <Link href={workspaceHref(answer.originRfpId, answer.originQuestionId ? { row: answer.originQuestionId } : {})} className="text-brand-blue hover:underline dark:text-sidebar-primary">
                 {answer.originRfpTitle}
               </Link>
             </span>

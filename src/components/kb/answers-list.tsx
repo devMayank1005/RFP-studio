@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { ApprovedAnswerRow } from "@/db/queries/kb";
 import { timeAgo } from "@/domain/dates";
+import { workspaceHref } from "@/components/workspace/params";
 
 import { kbParsers } from "./params";
 
@@ -66,7 +67,7 @@ export function AnswersList({ rows, filtered, now }: { rows: ApprovedAnswerRow[]
                 <TableCell className="hidden truncate text-2xs xl:table-cell">
                   {r.originRfpId && r.originRfpTitle ? (
                     <Link
-                      href={r.originQuestionId ? `/rfps/${r.originRfpId}/workspace?row=${r.originQuestionId}` : `/rfps/${r.originRfpId}/workspace`}
+                      href={workspaceHref(r.originRfpId, r.originQuestionId ? { row: r.originQuestionId } : {})}
                       className="text-muted-foreground hover:text-brand-blue dark:hover:text-sidebar-primary"
                       onClick={(e) => e.stopPropagation()}
                     >

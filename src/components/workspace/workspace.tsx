@@ -15,6 +15,7 @@ import type { WorkspaceRow } from "@/db/queries/workspace";
 import type { Role } from "@/domain/enums";
 import { setupStepPath } from "@/domain/routes";
 import { confidenceSort, sheetSort, triageSort } from "@/domain/triage";
+import { activeFilterGroups, applyWorkspaceFilters, type WorkspaceFilters } from "@/domain/workspace-filters";
 import { useApprove, usePrefetchDetail, useWorkspaceRows, workspaceKey, type WorkspaceData } from "@/hooks/use-workspace-data";
 import { useWorkspaceHotkeys, type HotkeyHandlers } from "@/hooks/use-workspace-hotkeys";
 import { useWorkspaceStore } from "@/store/workspace";
@@ -24,8 +25,8 @@ import { clientColumns as deriveClientColumns, readVisible, writeVisible } from 
 import { ContextPanel } from "./context-panel";
 import { FilterBar } from "./filter-bar";
 import { HotkeysHelp } from "./hotkeys-help";
-import { workspaceParsers } from "./params";
-import { SectionsPane, type Filters } from "./sections-pane";
+import { WORKSPACE_URL_OPTIONS, serializeWorkspace, workspaceParsers } from "./params";
+import { SectionsPane } from "./sections-pane";
 import { WorkspaceGrid, type GridHandle } from "./workspace-grid";
 
 const STATUS_ORDER = { flagged: 0, ai_draft: 1, edited: 2, approved: 3 } as const;
@@ -41,7 +42,7 @@ export function Workspace({ rfpId, initial, role }: { rfpId: string; initial: Wo
   const sections = data.sections;
   const qc = useQueryClient();
 
-  const [params, setParams] = useQueryStates(workspaceParsers, { shallow: true, history: "replace" });
+  const [params, setParams] = useQueryStates(workspaceParsers, WORKSPACE_URL_OPTIONS);
   const activeId = useWorkspaceStore((s) => s.activeId);
   const setActive = useWorkspaceStore((s) => s.setActive);
   const density = useWorkspaceStore((s) => s.density);
@@ -84,21 +85,22 @@ export function Workspace({ rfpId, initial, role }: { rfpId: string; initial: Wo
     writeVisible(rfpId, cols);
   };
 
-  const filters: Filters = { status: params.status, owner: params.owner, compliance: params.compliance, section: params.section };
-  const activeFilterCount = params.status.length + params.owner.length + params.compliance.length + params.module.length + (params.section ? 1 : 0) + (params.q ? 1 : 0);
+  const filters: WorkspaceFilters = { status: params.status, owner: params.owner, compliance: params.compliance, module: params.module, section: params.section, q: params.q };
+  const activeFilterCount = activeFilterGroups(filters);
+
+  // The URL is the filter state, so it must be spelt one way. A pasted or hand-edited link
+  // (`?compliance`, `owner=kognoz,darwinbox,not_applicable=fully`) parses to its clean form
+  // above; rewrite the address bar to match, and drop a section id this RFP does not have.
+  useEffect(() => {
+    const canonical = serializeWorkspace(params);
+    if (window.location.search !== canonical) window.history.replaceState(window.history.state, "", window.location.pathname + canonical);
+    if (params.section && params.section !== "none" && !sections.some((s) => s.id === params.section)) void setParams({ section: "" });
+    // Once per load, once the sections are known: later writes go through setParams and are canonical already.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sections]);
 
   const visibleRows = useMemo(() => {
-    const q = params.q.trim().toLowerCase();
-    const filtered = rows.filter((r) => {
-      if (params.section && (params.section === "none" ? r.sectionId !== null : r.sectionId !== params.section)) return false;
-      if (params.status.length && !params.status.includes(r.status ?? "undrafted")) return false;
-      if (params.owner.length && !params.owner.includes(r.owner)) return false;
-      if (params.compliance.length && !(r.compliance && params.compliance.includes(r.compliance))) return false;
-      if (params.module.length && !params.module.includes(r.moduleHint)) return false;
-      if (q && !(r.questionText.toLowerCase().includes(q) || r.refNo.toLowerCase().includes(q) || (r.responsePreview ?? "").toLowerCase().includes(q) || Object.values(r.rawMeta).some((v) => v.toLowerCase().includes(q)))) return false;
-      return true;
-    });
-    const withId = filtered.map((r) => ({ ...r, id: r.questionId }));
+    const withId = applyWorkspaceFilters(rows, filters).map((r) => ({ ...r, id: r.questionId }));
     switch (params.sort) {
       case "sheet":
         return sheetSort(withId);
@@ -109,6 +111,7 @@ export function Workspace({ rfpId, initial, role }: { rfpId: string; initial: Wo
       default:
         return triageSort(withId);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, params]);
 
   const activeRow = rows.find((r) => r.questionId === activeId) ?? null;
