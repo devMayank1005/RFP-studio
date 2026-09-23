@@ -3,7 +3,7 @@
  *
  *   pnpm kb:ingest "~/Desktop/Standard Integration docs/Biometric API integration.pdf"
  *   pnpm kb:ingest deck.pptx --kind internal_doc --type kognoz_service --product Kognoz
- *   pnpm kb:ingest "TOI-RFP (filled).xlsx" --kind rfp_response         # rows → precedents, no model
+ *   pnpm kb:ingest "TOI-RFP (filled).xlsx" --kind rfp_response --client "Times of India"   # rows → precedents, no model
  *   pnpm kb:ingest transcript.md --kind rfp_response --name "Axiata RFP response (chat)"
  *   pnpm kb:ingest <file> --dry-run                                     # print what would be written, touch nothing
  *
@@ -22,6 +22,7 @@ import { embedPendingAnswers, embedPendingForSource, finishKbSource, upsertKbSou
 import { WORKSPACE_ID } from "@/db/seed/data/workspace";
 import { KB_ENTRY_TYPES, KB_SOURCE_KINDS, type KbEntryType, type KbSourceKind } from "@/domain/enums";
 import { sheetPrecedents, type Precedent } from "@/domain/ingest";
+import { scrubClientName } from "@/domain/kb";
 import { resolveColumns } from "@/engine/columns";
 import { extractKbEntries, extractPrecedents } from "@/engine/ingest";
 import { parseDocument, type ParsedDocument } from "@/lib/parsing";
@@ -54,7 +55,7 @@ async function sheetPrecedentsOf(doc: ParsedDocument): Promise<Precedent[] | nul
 async function main() {
   const file = process.argv.slice(2).find((a) => !a.startsWith("--") && !process.argv[process.argv.indexOf(a) - 1]?.startsWith("--"));
   if (!file) {
-    console.error("usage: pnpm kb:ingest <file> [--kind darwinbox_docs|internal_doc|rfp_response] [--type <entry type>] [--product Darwinbox] [--name <source name>] [--dry-run]");
+    console.error("usage: pnpm kb:ingest <file> [--kind darwinbox_docs|internal_doc|rfp_response] [--type <entry type>] [--product Darwinbox] [--name <source name>] [--client <client name to scrub>] [--dry-run]");
     process.exit(1);
   }
   const dryRun = process.argv.includes("--dry-run");
@@ -62,6 +63,8 @@ async function main() {
   const entryType = pick<KbEntryType>(flag("type"), KB_ENTRY_TYPES, "darwinbox_capability", "type");
   const kind = pick<KbSourceKind>(flag("kind"), KB_SOURCE_KINDS, "darwinbox_docs", "kind");
   const sourceName = flag("name") ?? path.basename(file);
+  // A past response names its client; a precedent must not, or the next draft for another client repeats it.
+  const client = flag("client");
 
   const started = Date.now();
   const doc = await parseDocument({ fileName: path.basename(file), buffer: await readFile(file) });
@@ -78,6 +81,7 @@ async function main() {
       precedents = r.precedents;
       console.log("[usage]", r.usage);
     }
+    if (client) precedents = precedents.map((p) => ({ ...p, question: scrubClientName(p.question, client), answer: scrubClientName(p.answer, client) }));
     console.log(`\n[result] ${precedents.length} precedents · ${((Date.now() - started) / 1000).toFixed(1)}s`);
     console.table(precedents.map((p) => ({ question: p.question.slice(0, 70), module: p.module, chars: p.answer.length, tags: p.tags.join(", ") })));
     if (dryRun) {

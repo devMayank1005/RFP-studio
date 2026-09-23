@@ -24,7 +24,8 @@
     "sweep:preview": "tsx scripts/sweep-preview.ts",
     "kb:seed": "tsx scripts/kb-seed.ts",
     "kb:ingest": "tsx scripts/kb-ingest.ts",
-    "inngest:dev": "npx inngest-cli@latest dev -u http://localhost:3001/api/inngest"
+    "inngest:dev": "npx inngest-cli@latest dev -u http://localhost:3001/api/inngest",
+    "kb:probe": "tsx scripts/kb-probe.ts"
   },
   "engines": {
     "node": ">=20.9.0"
