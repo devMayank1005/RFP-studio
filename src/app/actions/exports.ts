@@ -34,6 +34,11 @@ function pagePath(rfpId: string) {
   return `/rfps/${rfpId}/exports`;
 }
 
+/**
+ * Start one export build: the history row, its job, and the Inngest event.
+ * @throws {ActionError} If the role cannot export, the user is over budget, the RFP is not in the workspace, the input fails validation, the job runner is unconfigured, or the build cannot succeed (the refusals in the file comment above).
+ * @sideEffects Inserts `exports` and `generation_jobs`, sends `rfp/export.requested`, writes one `audit_log` row; may first retire a stale queued build and its job; revalidates the exports page.
+ */
 export async function requestExport(rfpId: string, format: ExportFormat, options?: ExportOptions): Promise<ActionResult<{ jobId: string; exportId: string }>> {
   return runAction(async () => {
     const session = await requireCan("export.create");
@@ -77,6 +82,11 @@ export async function requestExport(rfpId: string, format: ExportFormat, options
   });
 }
 
+/**
+ * Delete a finished export and its file.
+ * @throws {ActionError} If the role cannot export, the RFP is not in the workspace, the export is not on this RFP, or its build is still queued or running.
+ * @sideEffects Deletes the `exports` row and, best effort, its Blob file; writes one `audit_log` row; revalidates the exports page.
+ */
 export async function deleteExport(rfpId: string, exportId: string): Promise<ActionResult> {
   return runAction(async () => {
     const session = await requireCan("export.create");

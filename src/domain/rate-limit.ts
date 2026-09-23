@@ -23,6 +23,7 @@ export const RATE_LIMITS: Record<RateLimitScope, RateLimitPolicy> = {
   "api:session": { windowMs: 60_000, max: 300 },
 };
 
+/** The counter's key: scope and subject together, so one user has a separate bucket per scope. */
 export function rateLimitKey(scope: RateLimitScope, subject: string): string {
   return `${scope}:${subject}`;
 }
@@ -45,6 +46,7 @@ export function decide(policy: RateLimitPolicy, count: number, windowStart: Date
   };
 }
 
+/** What the user sees when a call is refused, with the wait in whole seconds. */
 export function rateLimitMessage(retryAfterSeconds: number): string {
   return `Slow down — try again in ${retryAfterSeconds} s.`;
 }

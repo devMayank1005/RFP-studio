@@ -288,6 +288,7 @@ export const ROLE_LABEL: Record<Role, string> = {
 export const CONFIDENCE_BANDS = ["high", "medium", "low"] as const;
 export type ConfidenceBand = (typeof CONFIDENCE_BANDS)[number];
 
+/** The band a confidence score falls in; null when there is no usable score (nothing drafted, or not a number). */
 export function confidenceBand(confidence: number | null | undefined): ConfidenceBand | null {
   if (confidence === null || confidence === undefined || Number.isNaN(confidence)) return null;
   if (confidence >= 0.8) return "high";

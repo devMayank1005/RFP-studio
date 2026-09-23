@@ -143,6 +143,7 @@ function renderNode(node: DocxNode, p: Palette): Array<Paragraph | Table> {
   }
 }
 
+/** Render the outline as a Word file: a cover section, then the body under a running header and a page-numbered footer. */
 export async function renderDocx(model: ExportModel, brand: ExportBrand, summary: ExecutiveSummary | null, logo: LogoAsset | null): Promise<Buffer> {
   const p = palette(brand);
   const nodes = docxOutline(model, summary, brand.footerText);

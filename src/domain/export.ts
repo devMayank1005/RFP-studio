@@ -41,6 +41,7 @@ export const EXPORT_SHAPES = ["fresh", "fill"] as const;
 export type ExportOptions = { approvedOnly?: boolean; shape?: ExportShape };
 export const DEFAULT_EXPORT_OPTIONS: Required<ExportOptions> = { approvedOnly: false, shape: "fresh" };
 
+/** Options as the renderers expect them: anything missing or unrecognised falls back to the defaults (every answer, fresh workbook). */
 export function normaliseExportOptions(input: ExportOptions | null | undefined): Required<ExportOptions> {
   return {
     approvedOnly: input?.approvedOnly === true,
@@ -203,6 +204,12 @@ const SOURCE_FALLBACK: Record<CitationSource, string> = {
   rfp_document: "RFP document",
 };
 
+/**
+ * The one model every renderer reads: questions in order with their answer,
+ * citations and section title; sections in order, orphans under "Other
+ * requirements"; kept CHRO questions; readiness and compliance counts. With
+ * `approvedOnly` an unapproved answer keeps its status but shows no text.
+ */
 export function buildExportModel(source: ExportSource, options?: ExportOptions): ExportModel {
   const opts = normaliseExportOptions(options);
   const sectionTitle = new Map(source.sections.map((s) => [s.id, s.title]));
@@ -262,6 +269,7 @@ export function buildExportModel(source: ExportSource, options?: ExportOptions):
 
 // ---- Counts ----
 
+/** How much of the RFP is ready to send: drafted, approved and flagged, plus the complements the cover and summary sheet show. */
 export function exportReadiness(rows: ReadonlyArray<{ status: ResponseStatus | null }>): ExportReadiness {
   let drafted = 0;
   let approved = 0;
@@ -274,6 +282,7 @@ export function exportReadiness(rows: ReadonlyArray<{ status: ResponseStatus | n
   return { total: rows.length, drafted, approved, unapproved: rows.length - approved, flagged, notDrafted: rows.length - drafted };
 }
 
+/** Answers per compliance level; every level is present (zero when unused) so tables never miss a row. */
 export function complianceCounts(rows: ReadonlyArray<{ compliance: Compliance | null }>): Record<Compliance, number> {
   const counts = Object.fromEntries(COMPLIANCE_LEVELS.map((c) => [c, 0])) as Record<Compliance, number>;
   for (const r of rows) if (r.compliance) counts[r.compliance] += 1;
@@ -340,6 +349,7 @@ function longestLine(s: string): number {
   return s.split(/\r?\n/).reduce((m, l) => Math.max(m, l.length), 0);
 }
 
+/** The fresh workbook's columns: the client's, sized from their values, then ours — prefixed "Kognoz" when the client already has a header of the same name. */
 export function xlsxColumnPlan(model: ExportModel): XlsxColumn[] {
   const taken = new Set(model.clientColumns.map((h) => h.trim().toLowerCase()));
   const client: XlsxColumn[] = model.clientColumns.map((header, i) => ({
@@ -363,6 +373,7 @@ export function xlsxColumnPlan(model: ExportModel): XlsxColumn[] {
 
 export const NOT_DRAFTED_LABEL = "Not drafted";
 
+/** One question's cell values keyed by column: the client's cells verbatim, ours as the labels a reader expects rather than enum codes. */
 export function xlsxRowValues(q: ExportQuestion, plan: readonly XlsxColumn[]): Record<string, string> {
   const out: Record<string, string> = {};
   for (const col of plan) {
@@ -400,10 +411,12 @@ export function xlsxRowValues(q: ExportQuestion, plan: readonly XlsxColumn[]): R
   return out;
 }
 
+/** Citations on one line, "[1] Title; [2] Title"; null when there are none so a renderer can leave the cell out. */
 export function formatSources(sources: readonly ExportSourceRef[]): string | null {
   return sources.length ? sources.map((s) => `[${s.ordinal}] ${s.title}`).join("; ") : null;
 }
 
+/** Label/value pairs for the summary sheet: the RFP's identity, readiness and compliance counts, which answers were included, and the brand footer if any. */
 export function xlsxSummaryRows(model: ExportModel, footerText: string | null): Array<[string, string]> {
   const r = model.readiness;
   const byStatus = (status: ResponseStatus) => model.questions.filter((q) => q.answer?.status === status).length;
@@ -599,6 +612,11 @@ function slug(input: string, max = 60): string {
   return out.join("-").slice(0, max);
 }
 
+/**
+ * The download's name: `<client>-<title>-response-<date>.<ext>`, the client
+ * said once; for a filled workbook, the client's own file name plus a Kognoz
+ * suffix. Capped at 120 characters.
+ */
 export function exportFileName(input: { clientName: string; rfpTitle: string; format: ExportFormat; date: string; shape?: ExportShape; originalName?: string | null }): string {
   const ext = EXPORT_FORMAT_META[input.format].extension;
   if (input.shape === "fill" && input.originalName) {
@@ -676,6 +694,7 @@ function titleCase(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+/** Label/value pairs for the Word "Response overview" table: who, what, when, and how much is answered and approved. */
 export function overviewRows(model: ExportModel): Array<[string, string]> {
   const r = model.readiness;
   const compliance = COMPLIANCE_LEVELS.filter((c) => model.complianceCounts[c] > 0)
@@ -692,6 +711,11 @@ export function overviewRows(model: ExportModel): Array<[string, string]> {
   ];
 }
 
+/**
+ * The Word document as an ordered list of nodes: cover, executive summary (or
+ * a muted note when none), overview, a heading per section with its questions,
+ * and the CHRO appendix when questions were kept. The renderer only walks this.
+ */
 export function docxOutline(model: ExportModel, summary: ExecutiveSummary | null, footerText: string | null = null): DocxNode[] {
   const nodes: DocxNode[] = [];
   nodes.push({ kind: "cover", title: model.rfp.title, client: model.client.name, date: model.generatedOn, footerText, readiness: model.readiness });
@@ -737,6 +761,7 @@ export function docxOutline(model: ExportModel, summary: ExecutiveSummary | null
   return nodes;
 }
 
+/** The heading for a theme in the CHRO appendix. */
 export function chroThemeLabel(theme: ChroTheme): string {
   return CHRO_THEME_LABEL[theme];
 }
@@ -759,10 +784,12 @@ export function brandHex(hex: string | null | undefined, fallback: string): stri
   return (n ? n.slice(1) : fallback).toUpperCase();
 }
 
+/** ExcelJS wants ARGB: an opaque alpha in front of the bare brand hex. */
 export function argb(hex: string | null | undefined, fallback: string): string {
   return `FF${brandHex(hex, fallback)}`;
 }
 
+/** A darker shade of a brand colour, bare hex, for headings; the fallback is used as is when the input does not parse. */
 export function deepBrandHex(hex: string | null | undefined, fallback: string): string {
   const n = normaliseHex(hex);
   return brandHex(n ? deepenHex(n) : null, fallback);
@@ -789,6 +816,7 @@ export const STATUS_INK: Record<ResponseStatus, Ink> = {
 /** Fixed meaning colours (the brand supplies primary/accent/success). */
 export const INK_HEX = { amber: "B45309", red: "B3261E", muted: "6B7280" } as const;
 
+/** The Word font: the brand's family, or Calibri when unset or "system" (Word has no system font to fall back on). */
 export function docxFont(fontFamily: string | null | undefined): string {
   return !fontFamily || fontFamily === "system" ? "Calibri" : fontFamily;
 }

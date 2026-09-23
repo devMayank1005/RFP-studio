@@ -40,6 +40,7 @@ const question = (over: Partial<ExportSourceQuestion> & { id: string; questionTe
   ...over,
 });
 
+/** The fixture RFP as the raw source a renderer starts from; a fresh object each call. */
 export function sampleSource(): ExportSource {
   return {
     rfp: { id: "rfp-1", title: "Apex Manufacturing — HRMS implementation RFP", engagementType: "hris_implementation", bidderOfRecord: "joint", status: "in_review", dueDate: "2026-10-09", contextSummary: "Apex runs SAP today and wants one HR platform across 40 plants." },
@@ -108,6 +109,7 @@ export function sampleSource(): ExportSource {
   };
 }
 
+/** The fixture RFP built into an export model with the given options. */
 export function sampleModel(options?: ExportOptions): ExportModel {
   return buildExportModel(sampleSource(), options);
 }

@@ -40,6 +40,10 @@ export async function createJob(input: {
   return row?.id ?? null;
 }
 
+/**
+ * Flip a job to `running` and stamp `startedAt`; the Inngest run id is kept when the worker passes it.
+ * @sideEffects Updates `generation_jobs`; sends no events.
+ */
 export async function markJobRunning(jobId: string, runId?: string) {
   await db
     .update(generationJobs)
@@ -47,6 +51,10 @@ export async function markJobRunning(jobId: string, runId?: string) {
     .where(eq(generationJobs.id, jobId));
 }
 
+/**
+ * Set the job's progress outright — and the total, when a step only learns it late.
+ * @sideEffects Updates `generation_jobs`; sends no events.
+ */
 export async function setJobProgress(jobId: string, done: number, total?: number) {
   await db
     .update(generationJobs)
@@ -54,6 +62,10 @@ export async function setJobProgress(jobId: string, done: number, total?: number
     .where(eq(generationJobs.id, jobId));
 }
 
+/**
+ * Increment the job's progress in SQL, so parallel steps never lose a count to a stale read.
+ * @sideEffects Updates `generation_jobs`; sends no events.
+ */
 export async function bumpJobProgress(jobId: string, by = 1) {
   await db
     .update(generationJobs)
@@ -61,6 +73,10 @@ export async function bumpJobProgress(jobId: string, by = 1) {
     .where(eq(generationJobs.id, jobId));
 }
 
+/**
+ * Close a job as done, failed or cancelled and stamp `finishedAt`; `error` is what the UI shows.
+ * @sideEffects Updates `generation_jobs`; sends no events.
+ */
 export async function finishJob(jobId: string, status: Extract<JobStatus, "done" | "failed" | "cancelled">, error?: string) {
   await db
     .update(generationJobs)

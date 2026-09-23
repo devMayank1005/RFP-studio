@@ -47,6 +47,7 @@ function columnFor(header: string, ws: ExcelJS.Worksheet, columns: Map<string, n
   return null;
 }
 
+/** Fill the client's original workbook with the model's answers and add the "Kognoz notes" sheet; reports what was and was not placed. */
 export async function renderXlsxFill(model: ExportModel, brand: ExportBrand, original: Buffer): Promise<FillResult> {
   const font = docxFont(brand.fontFamily);
   const wb = new ExcelJS.Workbook();

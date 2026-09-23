@@ -24,6 +24,11 @@ async function ownedResponses(rfpId: string, questionIds: string[]) {
     .where(and(eq(rfpQuestions.rfpId, rfpId), inArray(rfpQuestions.id, questionIds)));
 }
 
+/**
+ * Approve the responses of the given questions.
+ * @throws {ActionError} If the role cannot approve, the RFP is not in the workspace, or none of the questions has a response yet.
+ * @sideEffects Updates `responses` (approved, approver stamped, flag cleared) and writes one `audit_log` row in a transaction; may move `rfps.status` to approved.
+ */
 export async function approveResponses(rfpId: string, questionIds: string[]): Promise<ActionResult<{ approved: string[] }>> {
   return runAction(async () => {
     const session = await requireCan("response.approve");
@@ -46,6 +51,11 @@ export async function approveResponses(rfpId: string, questionIds: string[]): Pr
   });
 }
 
+/**
+ * Send approved responses back to edited.
+ * @throws {ActionError} If the role cannot approve or the RFP is not in the workspace.
+ * @sideEffects Updates `responses` and writes one `audit_log` row in a transaction; may move `rfps.status` back to in_review.
+ */
 export async function unapproveResponses(rfpId: string, questionIds: string[]): Promise<ActionResult<{ updated: string[] }>> {
   return runAction(async () => {
     const session = await requireCan("response.approve");
@@ -61,6 +71,11 @@ export async function unapproveResponses(rfpId: string, questionIds: string[]): 
   });
 }
 
+/**
+ * Flag a response for attention, with an optional reason.
+ * @throws {ActionError} If the role cannot flag, the RFP is not in the workspace, or the question has no response yet.
+ * @sideEffects Updates `responses` (flagged, approval cleared) and writes one `audit_log` row in a transaction; may move `rfps.status` back to in_review.
+ */
 export async function flagResponse(rfpId: string, questionId: string, reason: string): Promise<ActionResult> {
   return runAction(async () => {
     const session = await requireCan("response.flag");
@@ -122,6 +137,11 @@ export async function editResponse(rfpId: string, questionId: string, finalText:
   });
 }
 
+/**
+ * Override the compliance rating on a response.
+ * @throws {ActionError} If the role cannot edit, the RFP is not in the workspace, or the question has no response yet.
+ * @sideEffects Updates `responses.compliance` and writes one `audit_log` row in a transaction.
+ */
 export async function setCompliance(rfpId: string, questionId: string, compliance: string): Promise<ActionResult> {
   return runAction(async () => {
     const session = await requireCan("response.edit");

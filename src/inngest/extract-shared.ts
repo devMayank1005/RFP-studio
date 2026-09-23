@@ -30,6 +30,12 @@ export interface DocumentExtraction {
   narrative: string;
 }
 
+/**
+ * Turn one parsed document into questions: per sheet for spreadsheets (sheets with no question column are skipped), per page chunk for narrative.
+ * Sections accumulate on top of `knownSections`; `onProgress` fires once per model call.
+ * @throws {Error} When a chunk returns nothing parseable — the caller's step retries.
+ * @sideEffects Calls the Claude engine; writes nothing.
+ */
 export async function extractParsedDocument(parsed: ParsedDocument, opts: { knownSections: string[]; onProgress?: () => void | Promise<void> }): Promise<DocumentExtraction> {
   const questions: ExtractedQuestion[] = [];
   let sections = [...opts.knownSections];

@@ -26,6 +26,7 @@ export interface RfpListRow {
   flaggedCount: number;
 }
 
+/** Every full RFP in the workspace with its progress figures, most recently updated first. Quick Q&A intakes are left out. */
 export async function listRfps(workspaceId: string): Promise<RfpListRow[]> {
   const rows = await db
     .select({
@@ -95,6 +96,7 @@ export async function getRfpHeader(workspaceId: string, rfpId: string): Promise<
   return row ?? null;
 }
 
+/** The workspace's clients by name, for the new-RFP picker. */
 export async function listClients(workspaceId: string) {
   return db
     .select({ id: clients.id, name: clients.name, industry: clients.industry, headcount: clients.headcount })

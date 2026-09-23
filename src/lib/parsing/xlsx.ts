@@ -122,6 +122,7 @@ function sheetText(sheet: ParsedSheet): string {
   return lines.join("\n");
 }
 
+/** Parse a workbook with ExcelJS: one `ParsedSheet` per sheet that has data rows; `text` renders every sheet line by line for embedding. */
 export async function parseXlsx(fileName: string, buffer: Buffer | ArrayBuffer | Uint8Array): Promise<ParsedDocument> {
   const wb = new ExcelJS.Workbook();
   const buf = buffer instanceof Buffer ? buffer : Buffer.from(buffer as ArrayBuffer);

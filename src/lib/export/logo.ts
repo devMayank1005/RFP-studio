@@ -18,6 +18,7 @@ export const DEFAULT_LOGO_PATH = "/brand/kognoz-logo.png";
 const MAX_LOGO_BYTES = 2 * 1024 * 1024;
 const FETCH_TIMEOUT_MS = 5_000;
 
+/** The default Kognoz mark, decoded from the embedded module. */
 export function embeddedLogo(): LogoAsset {
   return { data: Buffer.from(KOGNOZ_LOGO.base64, "base64"), type: KOGNOZ_LOGO.type, width: KOGNOZ_LOGO.width, height: KOGNOZ_LOGO.height };
 }
@@ -43,6 +44,10 @@ export function imageSize(buf: Buffer): { type: "png" | "jpg"; width: number; he
   return null;
 }
 
+/**
+ * The logo for a brand template's URL: the embedded mark for the default path,
+ * a fetched https image when it is a real PNG or JPEG under 2 MB, otherwise null.
+ */
 export async function resolveLogo(logoUrl: string | null | undefined, fetchImpl: typeof fetch = fetch): Promise<LogoAsset | null> {
   const url = logoUrl?.trim();
   if (!url || url === DEFAULT_LOGO_PATH) return embeddedLogo();

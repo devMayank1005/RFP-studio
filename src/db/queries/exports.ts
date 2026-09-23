@@ -127,6 +127,7 @@ export function pickWorkbook(documents: readonly ExportSourceDocument[]): Export
   return documents.find((d) => d.kind === "rfp_main" && d.parsedTextUrl && /\.xlsx$/i.test(d.fileName)) ?? null;
 }
 
+/** Whether a "fill" export is possible: the RFP has a parsed main .xlsx to write back into. Unscoped: callers are jobs. */
 export async function hasFillableWorkbook(rfpId: string): Promise<boolean> {
   const source = await getExportSource(rfpId);
   return !!source && pickWorkbook(source.documents) !== null;
@@ -187,6 +188,7 @@ export async function listExports(workspaceId: string, rfpId: string): Promise<E
   return rows.map(toRow);
 }
 
+/** One export with its blob URL, only if its RFP belongs to the workspace. Null otherwise. */
 export async function getExport(workspaceId: string, exportId: string, executor: Executor = db): Promise<(ExportRow & { fileUrl: string | null }) | null> {
   if (!isUuid(exportId)) return null;
   const [row] = await executor
@@ -201,11 +203,17 @@ export async function getExport(workspaceId: string, exportId: string, executor:
   return { ...toRow(rest), fileUrl };
 }
 
+/** The workspace's active brand template, or null when none is marked active. */
 export async function activeBrandTemplateId(workspaceId: string): Promise<string | null> {
   const [row] = await db.select({ id: brandTemplates.id }).from(brandTemplates).where(and(eq(brandTemplates.workspaceId, workspaceId), eq(brandTemplates.isActive, true))).limit(1);
   return row?.id ?? null;
 }
 
+/**
+ * Insert a queued export before the job is sent, so the history shows it at once.
+ * @returns The new export id.
+ * @sideEffects Writes `exports`; sends no events.
+ */
 export async function createExportRow(input: { rfpId: string; format: ExportFormat; brandTemplateId: string | null; options: ExportOptions; createdBy: string }): Promise<string> {
   const [row] = await db
     .insert(exportsTable)
@@ -214,14 +222,26 @@ export async function createExportRow(input: { rfpId: string; format: ExportForm
   return row.id;
 }
 
+/**
+ * Link the export to the generation job created for it.
+ * @sideEffects Updates `exports`; sends no events.
+ */
 export async function setExportJob(exportId: string, jobId: string): Promise<void> {
   await db.update(exportsTable).set({ jobId }).where(eq(exportsTable.id, exportId));
 }
 
+/**
+ * Flip the export to `running` and clear any error from an earlier attempt.
+ * @sideEffects Updates `exports`; sends no events.
+ */
 export async function markExportRunning(exportId: string): Promise<void> {
   await db.update(exportsTable).set({ status: "running", error: null }).where(eq(exportsTable.id, exportId));
 }
 
+/**
+ * Close the export: on success record the file, size and summary; on failure the error, cut to 500 chars. Both stamp `finishedAt`.
+ * @sideEffects Updates `exports`; sends no events.
+ */
 export async function finishExportRow(exportId: string, result: { status: "done"; fileUrl: string; fileName: string; sizeBytes: number; summary?: string | null } | { status: "failed"; error: string }): Promise<void> {
   const patch =
     result.status === "done"
@@ -241,6 +261,11 @@ export async function activeExport(rfpId: string, format: ExportFormat): Promise
   return row ?? null;
 }
 
+/**
+ * Remove an export row, handing back its blob URL so the caller can delete the file too.
+ * @returns The deleted row's `fileUrl`, or null when nothing matched.
+ * @sideEffects Deletes from `exports`; the blob itself is the caller's to remove.
+ */
 export async function deleteExportRow(exportId: string): Promise<{ fileUrl: string | null } | null> {
   const [row] = await db.delete(exportsTable).where(eq(exportsTable.id, exportId)).returning({ fileUrl: exportsTable.fileUrl });
   return row ?? null;

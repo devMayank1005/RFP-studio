@@ -1,6 +1,7 @@
 import { defineConfig, globalIgnores } from "eslint/config";
 import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
+import jsdoc from "eslint-plugin-jsdoc";
 
 // Environment variables must go through src/lib/env.ts.
 //
@@ -66,6 +67,35 @@ const eslintConfig = defineConfig([
               message:
                 "src/domain is the pure layer — no imports from db, lib, engine, inngest or app.",
             },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    // docs/developer-guide.md §3: every exported function in the service layers
+    // carries a TSDoc comment. Components are out of scope (the guide covers
+    // service code). The count reached zero on 2026-09-23; an undocumented
+    // export now fails lint, exactly as the guide asks.
+    files: [
+      "src/domain/**/*.ts",
+      "src/engine/**/*.ts",
+      "src/inngest/**/*.ts",
+      "src/db/**/*.ts",
+      "src/lib/**/*.ts",
+      "src/app/actions/**/*.ts",
+    ],
+    ignores: ["src/**/*.test.ts", "src/db/schema/**", "src/db/seed/**"],
+    plugins: { jsdoc },
+    rules: {
+      "jsdoc/require-jsdoc": [
+        "error",
+        {
+          publicOnly: true,
+          require: { FunctionDeclaration: true, ClassDeclaration: true },
+          contexts: [
+            "ExportNamedDeclaration > VariableDeclaration > VariableDeclarator > ArrowFunctionExpression",
+            "ExportNamedDeclaration > VariableDeclaration > VariableDeclarator > FunctionExpression",
           ],
         },
       ],

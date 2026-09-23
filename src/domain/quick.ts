@@ -40,6 +40,7 @@ export const quickInputSchema = z
   .refine((v) => v.source !== "paste" || v.text.length >= QUICK_TEXT_MIN, { message: "Paste at least one question.", path: ["text"] });
 export type QuickInput = z.infer<typeof quickInputSchema>;
 
+/** The first non-blank line, trimmed; null when there is none. */
 export function firstLine(text: string): string | null {
   const line = text
     .split(/\r?\n/)
@@ -142,6 +143,7 @@ export interface QuickCountable {
   kbAnswerId: string | null;
 }
 
+/** The session's tallies for the header and the progress strip: total, drafted, undrafted, approved and in the KB. */
 export function quickCounts(rows: readonly QuickCountable[]): { total: number; drafted: number; undrafted: number; approved: number; inKb: number } {
   return {
     total: rows.length,
@@ -152,6 +154,7 @@ export function quickCounts(rows: readonly QuickCountable[]): { total: number; d
   };
 }
 
+/** What a role may do on a session, in the page's own names; each maps onto the RFP action it reuses. */
 export function quickPermissions(role: Role) {
   return {
     create: can(role, "rfp.create"),

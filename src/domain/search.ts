@@ -18,6 +18,7 @@ export function normaliseQuery(raw: string): string {
   return raw.replace(/\s+/g, " ").trim().slice(0, SEARCH_MAX_LENGTH);
 }
 
+/** True once the normalised query is long enough to search; shorter input shows only the static entries. */
 export function isSearchable(raw: string): boolean {
   return normaliseQuery(raw).length >= SEARCH_MIN_LENGTH;
 }
@@ -27,6 +28,7 @@ export function escapeLike(s: string): string {
   return s.replace(/\\/g, "\\\\").replace(/[%_]/g, "\\$&");
 }
 
+/** The ILIKE pattern the server runs: the normalised, escaped query between wildcards. */
 export function likePattern(raw: string): string {
   return `%${escapeLike(normaliseQuery(raw))}%`;
 }
@@ -86,6 +88,7 @@ export function matchesStatic(label: string, q: string, keywords: readonly strin
   return tokens.every((t) => hay.includes(t));
 }
 
+/** The static entries that match the query (see `matchesStatic`); an empty query keeps them all. */
 export function filterStatic<T extends { title: string; keywords?: readonly string[] }>(items: readonly T[], q: string): T[] {
   return items.filter((item) => matchesStatic(item.title, q, item.keywords));
 }

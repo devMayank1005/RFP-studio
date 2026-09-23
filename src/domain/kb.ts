@@ -26,6 +26,7 @@ export interface GeneraliseInput {
   moduleHint: Module;
 }
 
+/** The user turn for the generalise call: client, module hint, the question (with its expected answer, if any) and the approved answer. */
 export function buildGeneraliseUserMessage(input: GeneraliseInput): string {
   return [
     `CLIENT: ${input.clientName}`,
@@ -90,6 +91,7 @@ function stripCitationMarkers(text: string): string {
   return text.replace(/\s*\[\d+\]/g, "");
 }
 
+/** The model's rewrite made safe to store: citation markers stripped, the client's name scrubbed, whitespace tidied, tags normalised. */
 export function sanitiseGeneralised(out: GeneraliseOutput, clientName: string): GeneraliseOutput {
   const clean = (s: string) => scrubClientName(stripCitationMarkers(s), clientName).replace(/[ \t]{2,}/g, " ").trim();
   return {
@@ -114,12 +116,14 @@ export const KB_TAB_LABEL: Record<KbTab, string> = {
 /** Tabs that list kb_entries. Retrieval already pools everything Kognoz-authored for `owner = kognoz`, so the screen does too. */
 export type KbEntryTab = Extract<KbTab, "capabilities" | "services">;
 
+/** The kb_entries types a tab lists; empty for tabs that show something else (answers, sources). */
 export function entryTypesForTab(tab: KbTab): KbEntryType[] {
   if (tab === "capabilities") return ["darwinbox_capability"];
   if (tab === "services") return ["kognoz_service", "case_study", "boilerplate"];
   return [];
 }
 
+/** The tab an entry belongs on: capabilities for Darwinbox, services for everything Kognoz-authored. */
 export function tabForEntryType(type: KbEntryType): KbEntryTab {
   return type === "darwinbox_capability" ? "capabilities" : "services";
 }

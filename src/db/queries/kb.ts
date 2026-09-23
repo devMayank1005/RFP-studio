@@ -91,6 +91,7 @@ export async function retrieveApprovedAnswers(workspaceId: string, embedding: nu
     .limit(k);
 }
 
+/** Entry, embedded-entry and approved-answer counts for the workspace — the KB health line. One round trip. */
 export async function kbStats(workspaceId: string) {
   const [row] = (
     await db.execute(sql`
@@ -180,6 +181,7 @@ export async function listKbEntries(workspaceId: string, filters: KbEntryFilters
     .orderBy(asc(kbEntries.module), asc(kbEntries.featureName));
 }
 
+/** One entry with its source name, scoped to the workspace. Null when it is not ours. */
 export async function getKbEntry(workspaceId: string, id: string): Promise<KbEntryRow | null> {
   if (!isUuid(id)) return null;
   const [row] = await db
@@ -259,6 +261,7 @@ export async function listApprovedAnswers(workspaceId: string, filters: { q?: st
     .orderBy(desc(approvedAnswers.reuseCount), desc(approvedAnswers.createdAt));
 }
 
+/** One approved answer with its origin RFP and question, scoped to the workspace. Null when it is not ours. */
 export async function getApprovedAnswer(workspaceId: string, id: string): Promise<ApprovedAnswerRow | null> {
   if (!isUuid(id)) return null;
   const [row] = await db
@@ -304,10 +307,12 @@ const sourceColumns = {
   dominantType: sql<KbEntryType | null>`(select e.entry_type from kb_entries e where e.source_id = kb_sources.id group by e.entry_type order by count(*) desc limit 1)`,
 };
 
+/** Every source in the workspace with its entry counts, newest ingest first. */
 export async function listKbSources(workspaceId: string): Promise<KbSourceRow[]> {
   return db.select(sourceColumns).from(kbSources).where(eq(kbSources.workspaceId, workspaceId)).orderBy(desc(kbSources.ingestedAt));
 }
 
+/** One source with its entry counts, scoped to the workspace. Null when it is not ours. */
 export async function getKbSource(workspaceId: string, id: string): Promise<KbSourceRow | null> {
   if (!isUuid(id)) return null;
   const [row] = await db.select(sourceColumns).from(kbSources).where(and(eq(kbSources.workspaceId, workspaceId), eq(kbSources.id, id))).limit(1);

@@ -65,6 +65,11 @@ export async function requestChroQuestions(rfpId: string, mode: "replace_suggest
   });
 }
 
+/**
+ * Move one question to suggested, kept or dropped.
+ * @throws {ActionError} If the role cannot curate, the RFP is not in the workspace, or the question is not on this RFP.
+ * @sideEffects Updates `chro_questions.status` and writes one `audit_log` row in a transaction; revalidates the CHRO page.
+ */
 export async function setChroStatus(rfpId: string, id: string, status: ChroStatus): Promise<ActionResult> {
   return runAction(async () => {
     const session = await requireCan("chro.curate");
@@ -80,6 +85,11 @@ export async function setChroStatus(rfpId: string, id: string, status: ChroStatu
   });
 }
 
+/**
+ * Rewrite a question's text and, when given, its rationale.
+ * @throws {ActionError} If the role cannot curate, the RFP is not in the workspace, or the question is not on this RFP.
+ * @sideEffects Updates `chro_questions` and writes one `audit_log` row in a transaction; revalidates the CHRO page.
+ */
 export async function editChroQuestion(rfpId: string, id: string, questionText: string, rationale?: string): Promise<ActionResult> {
   return runAction(async () => {
     const session = await requireCan("chro.curate");

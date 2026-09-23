@@ -16,6 +16,7 @@ export interface TriageRow {
 
 export const LOW_CONFIDENCE = 0.6;
 
+/** The bucket a row sorts into, 0 first: not supported, flagged, low confidence, not drafted, the rest, approved. */
 export function triageRank(row: TriageRow): number {
   if (row.status === "approved") return 5;
   if (row.status === null) return 3;
@@ -25,6 +26,7 @@ export function triageRank(row: TriageRow): number {
   return 4;
 }
 
+/** The default grid order: by rank, then rising confidence (undrafted last within a rank), then the sheet's own order. */
 export function triageSort<T extends TriageRow>(rows: T[]): T[] {
   return [...rows].sort((a, b) => {
     const ra = triageRank(a);
@@ -37,6 +39,7 @@ export function triageSort<T extends TriageRow>(rows: T[]): T[] {
   });
 }
 
+/** Rows by rising confidence, undrafted last, ties in the sheet's own order. */
 export function confidenceSort<T extends TriageRow>(rows: T[]): T[] {
   return [...rows].sort((a, b) => {
     const ca = a.confidence ?? Number.POSITIVE_INFINITY;
@@ -45,6 +48,7 @@ export function confidenceSort<T extends TriageRow>(rows: T[]): T[] {
   });
 }
 
+/** Rows in the order the client's document had them. */
 export function sheetSort<T extends TriageRow>(rows: T[]): T[] {
   return [...rows].sort((a, b) => a.sortOrder - b.sortOrder);
 }

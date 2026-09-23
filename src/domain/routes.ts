@@ -8,6 +8,7 @@ import type { RfpKind, RfpStatus } from "./enums";
 /** Statuses in which the question list is not confirmed yet: the RFP lives in the wizard. */
 export const INTAKE_STATUSES: readonly RfpStatus[] = ["draft", "parsing"];
 
+/** Where a link to an RFP lands: a Quick Q&A session on its own page, an RFP still in intake in the wizard, anything else in the workspace. */
 export function rfpLandingPath(rfpId: string, status: RfpStatus, kind: RfpKind = "full"): string {
   if (kind === "quick") return `/quick/${rfpId}`;
   return INTAKE_STATUSES.includes(status) ? `/rfps/${rfpId}/setup` : `/rfps/${rfpId}/workspace`;
@@ -26,6 +27,7 @@ export function setupStepFor(input: { status: RfpStatus; questionCount: number; 
   return "upload";
 }
 
+/** The URL of one wizard step. */
 export function setupStepPath(rfpId: string, step: SetupStep): string {
   return `/rfps/${rfpId}/setup/${step}`;
 }

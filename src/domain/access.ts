@@ -92,6 +92,7 @@ const ROLE_ACTIONS: Record<Role, ReadonlySet<Action>> = {
   reviewer: new Set<Action>(["response.edit", "response.approve", "response.flag", "kb.promote", "chro.curate"]),
 };
 
+/** Whether a role may take an action. An unknown role (a stale session, a typo) may do nothing. */
 export function can(role: Role | string, action: Action): boolean {
   const actions = ROLE_ACTIONS[role as Role];
   return actions ? actions.has(action) : false;
@@ -106,11 +107,13 @@ export function can(role: Role | string, action: Action): boolean {
  */
 export const FIXTURE_EMAIL_DOMAIN = "rfp-studio.invalid";
 
+/** True for the fixture users (`dev.<role>@rfp-studio.invalid`); a missing address is not one. */
 export function isFixtureAccount(email: string | null | undefined): boolean {
   const address = String(email ?? "").trim().toLowerCase();
   return address.endsWith(`@${FIXTURE_EMAIL_DOMAIN}`);
 }
 
+/** The team as this viewer should see it: real people only, unless the viewer is itself a fixture (the e2e suite sees everyone). */
 export function visibleMembers<T extends { email: string }>(members: readonly T[], viewerEmail: string | null | undefined): T[] {
   if (isFixtureAccount(viewerEmail)) return [...members];
   return members.filter((m) => !isFixtureAccount(m.email));

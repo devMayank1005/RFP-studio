@@ -45,6 +45,7 @@ export interface DraftRequest {
   previousDraft?: string | null;
 }
 
+/** The user turn for one draft: the question and its metadata, the numbered passages (or a note that none were found), then any previous draft and reviewer instruction. */
 export function buildDraftUserMessage(req: DraftRequest): string {
   const q = req.question;
   const lines = [

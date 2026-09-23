@@ -36,6 +36,7 @@ const columns = {
   createdAt: rfpDocuments.createdAt,
 };
 
+/** Every document on an RFP, oldest first, scoped to the workspace. Empty when the RFP is not ours. */
 export async function listDocuments(workspaceId: string, rfpId: string): Promise<DocumentRow[]> {
   if (!isUuid(rfpId)) return [];
   return db
@@ -52,6 +53,7 @@ export async function getDocumentForJob(documentId: string): Promise<DocumentRow
   return row ?? null;
 }
 
+/** Unscoped list for background jobs, oldest first — the same caveat as `getDocumentForJob`. */
 export async function listDocumentsForJob(rfpId: string): Promise<DocumentRow[]> {
   return db.select(columns).from(rfpDocuments).where(eq(rfpDocuments.rfpId, rfpId)).orderBy(asc(rfpDocuments.createdAt));
 }

@@ -30,6 +30,7 @@ export function daysBetween(from: string, to: string): number {
 
 export type DueUrgency = "overdue" | "soon" | "later" | "none";
 
+/** What to say about a due date given the days until it (negative when past); null means the RFP has none. */
 export function dueLabel(days: number | null): { text: string; urgency: DueUrgency } {
   if (days === null) return { text: "No due date", urgency: "none" };
   if (days < 0) {

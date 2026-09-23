@@ -18,14 +18,17 @@ export type ActionResult<T = undefined> =
   | { ok: true; data: T }
   | { ok: false; error: string; fieldErrors?: Record<string, string[]> };
 
+/** A successful result carrying `data`. */
 export function ok<T>(data: T): ActionResult<T> {
   return { ok: true, data };
 }
 
+/** A failed result: `error` for the toast, `fieldErrors` for the inline messages. */
 export function fail<T = undefined>(error: string, fieldErrors?: Record<string, string[]>): ActionResult<T> {
   return { ok: false, error, fieldErrors };
 }
 
+/** Thrown inside an action body for an expected failure; `runAction` turns it into a `fail` result instead of a 500. */
 export class ActionError extends Error {
   constructor(
     message: string,

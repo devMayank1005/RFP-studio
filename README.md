@@ -80,6 +80,15 @@ the function log, until step 1 is done.
 Functions are pinned to `bom1` (Mumbai) in `vercel.json`; the database is in Singapore (`sin1`),
 the closest Neon marketplace region.
 
+## Documentation
+
+| Where | What |
+|---|---|
+| `docs/architecture.md` | The design: stack, data model, backend and frontend flows, phased plan. |
+| `public/openapi.yaml` → **/docs/api** in the app | OpenAPI 3.1 contract for the HTTP surface, rendered with Swagger UI. `docs/api-status.md` says which operations are live and which are still served by server actions. |
+| `docs/developer-guide.md` | Repository layout, the TSDoc standard (`jsdoc/require-jsdoc` on every exported service function), prompt versioning, ADRs, runbooks. |
+| `docs/user-guide.md` → **/docs/guide** in the app | Every screen, role, status, compliance value and keyboard shortcut; the acceptance spec for the UI. |
+
 ## How it fits together
 
 ```

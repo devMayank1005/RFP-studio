@@ -76,6 +76,7 @@ export interface ColumnMap {
   hasQuestion: boolean;
 }
 
+/** Guessed roles → the column map the pipeline reads: the first header per role, and `passthrough` for everything kept verbatim. */
 export function columnMapFromRoles(roles: Record<string, GuessedRole>): ColumnMap {
   const first = (role: ColumnRole) => Object.entries(roles).find(([, r]) => r === role)?.[0] ?? null;
   const passthrough = Object.entries(roles)
@@ -121,6 +122,7 @@ export function mapExistingCompliance(value: string | null | undefined): Complia
 
 // ---- Structure ----
 
+/** The client's own reference when the row has one; else `R-001`-style from the running index. */
 export function generateRefNo(index: number, existing?: string | null): string {
   const own = (existing ?? "").trim();
   if (own) return own;
@@ -142,12 +144,14 @@ export function mergeSectionTitles(known: readonly string[], titles: Iterable<st
   return out;
 }
 
+/** Consecutive groups of at most `size` items. */
 export function chunk<T>(items: T[], size: number): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
   return out;
 }
 
+/** Consecutive pages grouped so a chunk stays under `maxChars`; a single oversize page still becomes a chunk of its own. */
 export function chunkPages<T extends { text: string }>(pages: T[], maxChars: number): T[][] {
   const out: T[][] = [];
   let current: T[] = [];
@@ -165,6 +169,7 @@ export function chunkPages<T extends { text: string }>(pages: T[], maxChars: num
   return out;
 }
 
+/** Whitespace collapsed and trailing punctuation dropped; blank becomes "General" so every question has a section. */
 export function normaliseSectionTitle(title: string | null | undefined): string {
   const t = (title ?? "").replace(/\s+/g, " ").trim().replace(/[\s:;,.\-–—]+$/g, "").trim();
   return t || "General";

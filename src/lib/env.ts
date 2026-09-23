@@ -21,6 +21,7 @@
 /** Whitespace at either end, literal (`\n`) or percent-encoded (`%0A`). */
 const EDGE_WHITESPACE = /^(?:\s|%0[AD]|%09)+|(?:\s|%0[AD]|%09)+$/gi;
 
+/** Strip whitespace from both ends of a value, literal or percent-encoded; the interior is never touched. */
 export function sanitizeEnvValue(raw: string): string {
   return raw.replace(EDGE_WHITESPACE, "");
 }

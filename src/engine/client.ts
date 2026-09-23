@@ -48,6 +48,7 @@ export interface UsageReport {
   cacheWriteTokens: number;
 }
 
+/** Token counts from a response's usage block — zeros when it is missing, so callers can always add them up. */
 export function readUsage(usage: Anthropic.Messages.Usage | undefined): UsageReport {
   return {
     inputTokens: usage?.input_tokens ?? 0,
@@ -57,6 +58,7 @@ export function readUsage(usage: Anthropic.Messages.Usage | undefined): UsageRep
   };
 }
 
+/** Sum two usage reports, for rolling up what a job spent across calls. */
 export function addUsage(a: UsageReport, b: UsageReport): UsageReport {
   return {
     inputTokens: a.inputTokens + b.inputTokens,

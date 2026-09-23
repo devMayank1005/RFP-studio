@@ -42,6 +42,7 @@ export interface ParseInput {
   buffer: Buffer | ArrayBuffer | Uint8Array;
 }
 
+/** Thrown by `parseDocument` when a file's extension and mime type name no parser; the message is safe to show the user. */
 export class UnsupportedDocumentError extends Error {
   constructor(fileName: string, mime?: string | null) {
     super(`Unsupported document: ${fileName}${mime ? ` (${mime})` : ""}. Upload .xlsx, .pdf or .docx.`);

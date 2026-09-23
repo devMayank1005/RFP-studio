@@ -19,6 +19,7 @@ export const CHRO_THEME_HINT: Record<ChroTheme, string> = {
 
 export { STALE_QUEUE_MS, isStaleQueuedJob } from "./jobs";
 
+/** How close an RFP is to the CHRO step: the approved share as a whole percentage, and `ready` once at least 80% is approved. */
 export function chroReadiness(input: { approved: number; total: number }): { approved: number; total: number; pct: number; ready: boolean } {
   const { approved, total } = input;
   const pct = total > 0 ? Math.round((approved / total) * 100) : 0;
@@ -77,6 +78,7 @@ function capped(lines: string[], budget: number): string {
   return out.join("\n");
 }
 
+/** The user turn for the CHRO call: client and brief, the approved answers and gaps within their budgets, and the questions already kept so the model does not repeat them. */
 export function buildChroUserMessage(input: ChroInput): string {
   const approvedLines = input.approved.map((r) => `- [${r.refNo}] ${clip(r.questionText, 300)} → ${clip(r.answerText ?? "", CHRO_CAPS.answerChars)}`);
   const gapLines = input.gaps.map((r) => {
@@ -139,6 +141,7 @@ export function sanitiseChroOutput(out: ChroOutput): ChroSuggestion[] {
   return cleaned;
 }
 
+/** A theme's position in the canonical order; sort orders and grouping are built on it. */
 export function themeIndex(theme: ChroTheme): number {
   return CHRO_THEMES.indexOf(theme);
 }
@@ -153,14 +156,17 @@ export interface ChroRowLike {
   createdAt: Date | string;
 }
 
+/** Display order: theme first, then sort order, then creation time as a stable tie-break. */
 export function sortChroRows<T extends ChroRowLike>(rows: readonly T[]): T[] {
   return [...rows].sort((a, b) => themeIndex(a.theme) - themeIndex(b.theme) || a.sortOrder - b.sortOrder || new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 }
 
+/** Rows bucketed under every theme in canonical order; an empty theme still appears so its heading can show. */
 export function groupByTheme<T extends { theme: ChroTheme }>(rows: readonly T[]): Array<{ theme: ChroTheme; rows: T[] }> {
   return CHRO_THEMES.map((theme) => ({ theme, rows: rows.filter((r) => r.theme === theme) }));
 }
 
+/** Rows per status; every status is present (zero when none) so the UI never reads undefined. */
 export function chroCounts(rows: ReadonlyArray<{ status: ChroStatus }>): Record<ChroStatus, number> {
   const counts: Record<ChroStatus, number> = { suggested: 0, kept: 0, dropped: 0 };
   for (const r of rows) counts[r.status]++;

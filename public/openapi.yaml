@@ -1,0 +1,1416 @@
+openapi: 3.1.0
+info:
+  title: RFP Studio API
+  version: 1.0.0
+  summary: Internal API for Kognoz's RFP response automation tool.
+  description: |
+    RFP Studio ingests client RFPs, extracts questions, drafts humanised responses grounded in the
+    Darwinbox capability library and Kognoz's own knowledge base, generates CHRO-level discovery
+    questions, and exports branded proposals.
+
+    ## Conventions
+    - All routes are workspace-scoped from the session; no `workspaceId` is passed by the client.
+    - Long-running work (parse, extract, draft, CHRO, export) is asynchronous: the endpoint enqueues a
+      job and returns `202 Accepted` with a `GenerationJob`. Poll `GET /jobs/{jobId}` or subscribe to
+      `GET /jobs/{jobId}/events` (SSE).
+    - IDs are UUIDv7. Timestamps are ISO-8601 UTC.
+    - List endpoints use cursor pagination: `?cursor=&limit=` and return `nextCursor`.
+    - Errors follow RFC 9457 Problem Details.
+  contact:
+    name: Kognoz Engineering
+servers:
+  - url: https://rfp.kognoz.com/api
+    description: Production (Vercel)
+  - url: http://localhost:3000/api
+    description: Local development
+
+tags:
+  - name: Auth
+    description: Session and identity.
+  - name: Clients
+    description: Client companies that send RFPs.
+  - name: RFPs
+    description: An RFP is the unit of work — one client request, many questions.
+  - name: Documents
+    description: Uploaded source files attached to an RFP.
+  - name: Questions
+    description: Extracted RFP line items, confirmed by a human before drafting.
+  - name: Responses
+    description: AI-drafted, human-reviewed answers to questions.
+  - name: CHRO Questions
+    description: Generated discovery questions for the client's CHRO conversation.
+  - name: Knowledge Base
+    description: Darwinbox capabilities, Kognoz services, and approved reusable answers.
+  - name: Jobs
+    description: Background job status and progress.
+  - name: Exports
+    description: Branded xlsx / docx / pptx outputs.
+  - name: Brand
+    description: Brand templates used by the UI and exports.
+  - name: Users
+    description: Workspace members and roles.
+
+security:
+  - sessionCookie: []
+
+paths:
+  /auth/me:
+    get:
+      tags: [Auth]
+      operationId: getCurrentUser
+      summary: Get the signed-in user and their workspace role.
+      responses:
+        "200":
+          description: Current user.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CurrentUser" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /clients:
+    get:
+      tags: [Clients]
+      operationId: listClients
+      summary: List clients in the workspace.
+      parameters:
+        - { $ref: "#/components/parameters/cursor" }
+        - { $ref: "#/components/parameters/limit" }
+        - name: q
+          in: query
+          description: Case-insensitive name search.
+          schema: { type: string }
+      responses:
+        "200":
+          description: Page of clients.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/Client" } }
+                  nextCursor: { type: [string, "null"] }
+    post:
+      tags: [Clients]
+      operationId: createClient
+      summary: Create a client.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ClientInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Client" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+
+  /clients/{clientId}:
+    parameters:
+      - { $ref: "#/components/parameters/clientId" }
+    get:
+      tags: [Clients]
+      operationId: getClient
+      summary: Get one client with its RFP summary.
+      responses:
+        "200":
+          description: Client.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Client" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Clients]
+      operationId: updateClient
+      summary: Update client fields.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ClientInput" }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Client" }
+
+  /rfps:
+    get:
+      tags: [RFPs]
+      operationId: listRfps
+      summary: List RFPs (the dashboard pipeline).
+      parameters:
+        - { $ref: "#/components/parameters/cursor" }
+        - { $ref: "#/components/parameters/limit" }
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/RfpStatus" }
+        - name: clientId
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Page of RFPs with progress counters.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/RfpSummary" } }
+                  nextCursor: { type: [string, "null"] }
+    post:
+      tags: [RFPs]
+      operationId: createRfp
+      summary: Create an RFP shell (step 1 of the New RFP wizard).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RfpInput" }
+      responses:
+        "201":
+          description: Created in `draft` status.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Rfp" }
+
+  /rfps/{rfpId}:
+    parameters:
+      - { $ref: "#/components/parameters/rfpId" }
+    get:
+      tags: [RFPs]
+      operationId: getRfp
+      summary: Get an RFP with documents, sections and counters.
+      responses:
+        "200":
+          description: RFP.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Rfp" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [RFPs]
+      operationId: updateRfp
+      summary: Update RFP metadata or status.
+      description: |
+        Status transitions are validated server-side. Allowed forward moves:
+        `draft → parsing → questions_ready → drafting → in_review → approved → submitted → won|lost`.
+        Only `admin` may move to `submitted`, `won`, or `lost`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RfpPatch" }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Rfp" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      tags: [RFPs]
+      operationId: archiveRfp
+      summary: Soft-delete an RFP (admin only).
+      responses:
+        "204": { description: Archived. }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /rfps/{rfpId}/documents:
+    parameters:
+      - { $ref: "#/components/parameters/rfpId" }
+    get:
+      tags: [Documents]
+      operationId: listRfpDocuments
+      summary: List uploaded source files for an RFP.
+      responses:
+        "200":
+          description: Documents.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/RfpDocument" }
+    post:
+      tags: [Documents]
+      operationId: uploadRfpDocument
+      summary: Upload a source file and enqueue parsing.
+      description: |
+        Accepts xlsx, docx, pdf, csv, txt, md (max 25 MB). Returns `202` with the document row and the
+        `parse` job. Parsing extracts text/tables only; question extraction is a separate step.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, kind]
+              properties:
+                file: { type: string, format: binary }
+                kind: { $ref: "#/components/schemas/DocumentKind" }
+      responses:
+        "202":
+          description: Accepted; parsing started.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  document: { $ref: "#/components/schemas/RfpDocument" }
+                  job: { $ref: "#/components/schemas/GenerationJob" }
+        "413": { description: File too large. }
+        "415": { description: Unsupported file type. }
+
+  /rfps/{rfpId}/documents/{documentId}:
+    parameters:
+      - { $ref: "#/components/parameters/rfpId" }
+      - name: documentId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    delete:
+      tags: [Documents]
+      operationId: deleteRfpDocument
+      summary: Remove a source file (allowed only before questions are confirmed).
+      responses:
+        "204": { description: Deleted. }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /rfps/{rfpId}/extract:
+    parameters:
+      - { $ref: "#/components/parameters/rfpId" }
+    post:
+      tags: [Questions]
+      operationId: extractQuestions
+      summary: Run AI question extraction over all parsed documents.
+      description: |
+        Produces `rfp_sections` and `rfp_questions` in `suggested` state, and writes
+        `Rfp.contextSummary` from any client-pointer documents. Re-running replaces unconfirmed
+        questions only; confirmed questions are preserved.
+      responses:
+        "202":
+          description: Extraction job started.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GenerationJob" }
+        "409":
+          description: No parsed documents yet.
+
+  /rfps/{rfpId}/questions:
+    parameters:
+      - { $ref: "#/components/parameters/rfpId" }
+    get:
+      tags: [Questions]
+      operationId: listQuestions
+      summary: List questions with their current response (the workspace grid).
+      parameters:
+        - name: sectionId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: owner
+          in: query
+          schema: { $ref: "#/components/schemas/Owner" }
+        - name: responseStatus
+          in: query
+          schema: { $ref: "#/components/schemas/ResponseStatus" }
+        - name: compliance
+          in: query
+          schema: { $ref: "#/components/schemas/Compliance" }
+        - name: sort
+          in: query
+          description: "`order` (document order, default) or `confidence_asc` (lowest confidence first)."
+          schema: { type: string, enum: [order, confidence_asc] }
+      responses:
+        "200":
+          description: Questions joined with responses.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/QuestionWithResponse" }
+    post:
+      tags: [Questions]
+      operationId: createQuestion
+      summary: Manually add a question (e.g. one the extractor missed).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/QuestionInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Question" }
+
+  /rfps/{rfpId}/questions/confirm:
+    parameters:
+      - { $ref: "#/components/parameters/rfpId" }
+    post:
+      tags: [Questions]
+      operationId: confirmQuestions
+      summary: Lock the question list and move the RFP to `questions_ready`.
+      description: Human checkpoint. After this call, questions can still be edited but not bulk-replaced by re-extraction.
+      responses:
+        "200":
+          description: RFP after confirmation.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Rfp" }
+
+  /rfps/{rfpId}/questions/{questionId}:
+    parameters:
+      - { $ref: "#/components/parameters/rfpId" }
+      - { $ref: "#/components/parameters/questionId" }
+    patch:
+      tags: [Questions]
+      operationId: updateQuestion
+      summary: Edit text, type, owner, module hint, or section of a question.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/QuestionInput" }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Question" }
+    delete:
+      tags: [Questions]
+      operationId: deleteQuestion
+      summary: Delete a question and its responses.
+      responses:
+        "204": { description: Deleted. }
+
+  /rfps/{rfpId}/questions/{questionId}/split:
+    parameters:
+      - { $ref: "#/components/parameters/rfpId" }
+      - { $ref: "#/components/parameters/questionId" }
+    post:
+      tags: [Questions]
+      operationId: splitQuestion
+      summary: Split one extracted question into several.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [parts]
+              properties:
+                parts:
+                  type: array
+                  minItems: 2
+                  items: { type: string }
+      responses:
+        "200":
+          description: The new questions (original is deleted).
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Question" }
+
+  /rfps/{rfpId}/questions/merge:
+    parameters:
+      - { $ref: "#/components/parameters/rfpId" }
+    post:
+      tags: [Questions]
+      operationId: mergeQuestions
+      summary: Merge several questions into one.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [questionIds]
+              properties:
+                questionIds: { type: array, minItems: 2, items: { type: string, format: uuid } }
+                mergedText: { type: string, description: Optional override; defaults to joined text. }
+      responses:
+        "200":
+          description: Merged question.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Question" }
+
+  /rfps/{rfpId}/draft:
+    parameters:
+      - { $ref: "#/components/parameters/rfpId" }
+    post:
+      tags: [Responses]
+      operationId: draftResponses
+      summary: Enqueue AI drafting for all (or selected) questions.
+      description: |
+        Each question becomes an independent job step: embed → retrieve from knowledge base →
+        Claude draft → store `ai_draft` response with citations. Questions that already have an
+        `approved` response are skipped unless `force=true`.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                questionIds:
+                  type: array
+                  items: { type: string, format: uuid }
+                  description: Subset to draft. Omit for all.
+                force: { type: boolean, default: false }
+                instruction:
+                  type: string
+                  description: Optional global instruction applied to every draft in this run.
+      responses:
+        "202":
+          description: Draft job started.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GenerationJob" }
+        "409":
+          description: Questions not yet confirmed.
+
+  /responses/{responseId}:
+    parameters:
+      - { $ref: "#/components/parameters/responseId" }
+    get:
+      tags: [Responses]
+      operationId: getResponse
+      summary: Get a response with its full revision history and citations.
+      responses:
+        "200":
+          description: Response detail.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResponseDetail" }
+    patch:
+      tags: [Responses]
+      operationId: updateResponse
+      summary: Edit text, change compliance, assign, approve, flag, or promote to knowledge base.
+      description: |
+        Editing `finalText` creates a new revision. Setting `status: approved` requires `reviewer` or
+        `admin` role. `promoteToKb: true` on approval creates an `ApprovedAnswer` with a generalised
+        (client-stripped) canonical question.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ResponsePatch" }
+      responses:
+        "200":
+          description: Updated response.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResponseDetail" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /responses/{responseId}/regenerate:
+    parameters:
+      - { $ref: "#/components/parameters/responseId" }
+    post:
+      tags: [Responses]
+      operationId: regenerateResponse
+      summary: Regenerate one response with an instruction.
+      description: Synchronous for a single response (typically 5–15 s). Creates a new revision; previous revisions are kept.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [instruction]
+              properties:
+                instruction:
+                  type: string
+                  examples: ["Shorter, two sentences.", "Mention our SAP SuccessFactors migration experience."]
+      responses:
+        "200":
+          description: Response with the new revision as current.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResponseDetail" }
+
+  /responses/bulk:
+    post:
+      tags: [Responses]
+      operationId: bulkUpdateResponses
+      summary: Apply one action to many responses (approve, flag, assign).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [responseIds, action]
+              properties:
+                responseIds: { type: array, items: { type: string, format: uuid } }
+                action: { type: string, enum: [approve, flag, unflag, assign] }
+                assigneeId: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Counts.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  updated: { type: integer }
+                  skipped: { type: integer }
+
+  /rfps/{rfpId}/chro:
+    parameters:
+      - { $ref: "#/components/parameters/rfpId" }
+    get:
+      tags: [CHRO Questions]
+      operationId: listChroQuestions
+      summary: List generated CHRO discovery questions grouped by theme.
+      responses:
+        "200":
+          description: Questions.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ChroQuestion" }
+    post:
+      tags: [CHRO Questions]
+      operationId: generateChroQuestions
+      summary: Generate (or regenerate) the CHRO question set.
+      description: Uses client context, approved responses, and every partial / not-supported / open item. Existing `kept` questions are preserved; `suggested` ones are replaced.
+      responses:
+        "202":
+          description: Generation job started.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GenerationJob" }
+
+  /rfps/{rfpId}/chro/{chroQuestionId}:
+    parameters:
+      - { $ref: "#/components/parameters/rfpId" }
+      - name: chroQuestionId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    patch:
+      tags: [CHRO Questions]
+      operationId: updateChroQuestion
+      summary: Edit, keep, drop, or reorder a CHRO question.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                questionText: { type: string }
+                rationale: { type: string }
+                status: { type: string, enum: [suggested, kept, dropped] }
+                sortOrder: { type: integer }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChroQuestion" }
+
+  /kb/entries:
+    get:
+      tags: [Knowledge Base]
+      operationId: listKbEntries
+      summary: List capability / service / case-study entries.
+      parameters:
+        - { $ref: "#/components/parameters/cursor" }
+        - { $ref: "#/components/parameters/limit" }
+        - name: entryType
+          in: query
+          schema: { $ref: "#/components/schemas/KbEntryType" }
+        - name: module
+          in: query
+          schema: { type: string }
+        - name: q
+          in: query
+          description: Semantic search over entry bodies.
+          schema: { type: string }
+      responses:
+        "200":
+          description: Page of entries.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/KbEntry" } }
+                  nextCursor: { type: [string, "null"] }
+    post:
+      tags: [Knowledge Base]
+      operationId: createKbEntry
+      summary: Create an entry (embedding is computed server-side).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/KbEntryInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KbEntry" }
+
+  /kb/entries/{entryId}:
+    parameters:
+      - name: entryId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    patch:
+      tags: [Knowledge Base]
+      operationId: updateKbEntry
+      summary: Update an entry (re-embeds if body changes).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/KbEntryInput" }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KbEntry" }
+    delete:
+      tags: [Knowledge Base]
+      operationId: deactivateKbEntry
+      summary: Deactivate an entry (kept for citation history, excluded from retrieval).
+      responses:
+        "204": { description: Deactivated. }
+
+  /kb/sources:
+    post:
+      tags: [Knowledge Base]
+      operationId: ingestKbSource
+      summary: Upload a source document (e.g. Darwinbox module guide) and chunk it into entries.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, entryType]
+              properties:
+                file: { type: string, format: binary }
+                entryType: { $ref: "#/components/schemas/KbEntryType" }
+                product: { type: string, examples: [darwinbox] }
+                module: { type: string }
+      responses:
+        "202":
+          description: Ingestion job started.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GenerationJob" }
+
+  /kb/approved-answers:
+    get:
+      tags: [Knowledge Base]
+      operationId: listApprovedAnswers
+      summary: List reusable approved answers with reuse counts.
+      parameters:
+        - { $ref: "#/components/parameters/cursor" }
+        - { $ref: "#/components/parameters/limit" }
+        - name: q
+          in: query
+          schema: { type: string }
+        - name: module
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Page.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/ApprovedAnswer" } }
+                  nextCursor: { type: [string, "null"] }
+
+  /kb/approved-answers/{answerId}:
+    parameters:
+      - name: answerId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    patch:
+      tags: [Knowledge Base]
+      operationId: updateApprovedAnswer
+      summary: Edit the canonical question/answer or tags.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                canonicalQuestion: { type: string }
+                canonicalAnswer: { type: string }
+                module: { type: string }
+                tags: { type: array, items: { type: string } }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApprovedAnswer" }
+    delete:
+      tags: [Knowledge Base]
+      operationId: deleteApprovedAnswer
+      summary: Remove an approved answer from the knowledge base.
+      responses:
+        "204": { description: Deleted. }
+
+  /jobs/{jobId}:
+    parameters:
+      - { $ref: "#/components/parameters/jobId" }
+    get:
+      tags: [Jobs]
+      operationId: getJob
+      summary: Get job status and progress.
+      responses:
+        "200":
+          description: Job.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GenerationJob" }
+
+  /jobs/{jobId}/events:
+    parameters:
+      - { $ref: "#/components/parameters/jobId" }
+    get:
+      tags: [Jobs]
+      operationId: streamJobEvents
+      summary: Server-Sent Events stream of job progress.
+      description: |
+        Emits `progress` events (`{done, total, lastItemId}`) and a terminal `completed` or `failed`
+        event, then closes. Reconnect-safe: the stream replays the current state on connect.
+      responses:
+        "200":
+          description: SSE stream.
+          content:
+            text/event-stream:
+              schema: { type: string }
+
+  /jobs/{jobId}/cancel:
+    parameters:
+      - { $ref: "#/components/parameters/jobId" }
+    post:
+      tags: [Jobs]
+      operationId: cancelJob
+      summary: Cancel a running job (completed steps are kept).
+      responses:
+        "200":
+          description: Job after cancellation.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GenerationJob" }
+
+  /rfps/{rfpId}/exports:
+    parameters:
+      - { $ref: "#/components/parameters/rfpId" }
+    get:
+      tags: [Exports]
+      operationId: listExports
+      summary: List generated export files for an RFP.
+      responses:
+        "200":
+          description: Exports.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Export" }
+    post:
+      tags: [Exports]
+      operationId: createExport
+      summary: Generate a branded export.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [format]
+              properties:
+                format: { type: string, enum: [xlsx, docx, pptx] }
+                brandTemplateId: { type: string, format: uuid, description: Defaults to the workspace template. }
+                includeChroQuestions: { type: boolean, default: true }
+                includeUnapproved: { type: boolean, default: false }
+      responses:
+        "202":
+          description: Export job started; the `Export` row appears when complete.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GenerationJob" }
+
+  /exports/{exportId}/download:
+    parameters:
+      - name: exportId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Exports]
+      operationId: downloadExport
+      summary: Get a short-lived signed download URL.
+      responses:
+        "302":
+          description: Redirect to signed Blob URL (valid 15 minutes).
+
+  /brand-templates:
+    get:
+      tags: [Brand]
+      operationId: listBrandTemplates
+      summary: List brand templates.
+      responses:
+        "200":
+          description: Templates.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/BrandTemplate" }
+    post:
+      tags: [Brand]
+      operationId: createBrandTemplate
+      summary: Create a brand template (admin).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BrandTemplateInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BrandTemplate" }
+
+  /brand-templates/{templateId}:
+    parameters:
+      - name: templateId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    patch:
+      tags: [Brand]
+      operationId: updateBrandTemplate
+      summary: Update a brand template (admin).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BrandTemplateInput" }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BrandTemplate" }
+
+  /users:
+    get:
+      tags: [Users]
+      operationId: listUsers
+      summary: List workspace members.
+      responses:
+        "200":
+          description: Members.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Member" }
+    post:
+      tags: [Users]
+      operationId: inviteUser
+      summary: Invite a member by email (admin).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, role]
+              properties:
+                email: { type: string, format: email }
+                role: { $ref: "#/components/schemas/Role" }
+      responses:
+        "201":
+          description: Invited.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Member" }
+
+  /users/{userId}:
+    parameters:
+      - name: userId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    patch:
+      tags: [Users]
+      operationId: updateUserRole
+      summary: Change a member's role (admin).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role: { $ref: "#/components/schemas/Role" }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Member" }
+    delete:
+      tags: [Users]
+      operationId: removeUser
+      summary: Remove a member (admin).
+      responses:
+        "204": { description: Removed. }
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: rfpstudio.session
+      description: Auth.js session cookie set after Google Workspace sign-in.
+
+  parameters:
+    cursor:
+      name: cursor
+      in: query
+      schema: { type: string }
+    limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+    clientId:
+      name: clientId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    rfpId:
+      name: rfpId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    questionId:
+      name: questionId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    responseId:
+      name: responseId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    jobId:
+      name: jobId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  responses:
+    Unauthorized:
+      description: No valid session.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    Forbidden:
+      description: Role does not permit this action.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    NotFound:
+      description: Resource not found in this workspace.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    ValidationError:
+      description: Request body failed zod validation; `errors` lists field paths.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    Conflict:
+      description: Invalid state transition or precondition not met.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+
+  schemas:
+    Problem:
+      type: object
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              path: { type: string }
+              message: { type: string }
+
+    Role:
+      type: string
+      enum: [admin, consultant, sales, reviewer]
+      description: |
+        - `admin` — everything, incl. brand, users, status to submitted/won/lost
+        - `consultant` — create RFPs, edit questions/responses, run drafting
+        - `sales` — create RFPs, upload, view, export
+        - `reviewer` — approve/flag responses, curate CHRO questions, promote to KB
+
+    CurrentUser:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string }
+        name: { type: string }
+        role: { $ref: "#/components/schemas/Role" }
+        workspaceId: { type: string, format: uuid }
+
+    Member:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string }
+        name: { type: string }
+        role: { $ref: "#/components/schemas/Role" }
+        invitedAt: { type: string, format: date-time }
+
+    ClientInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        industry: { type: string }
+        hqCountry: { type: string }
+        countriesCount: { type: integer }
+        headcount: { type: integer }
+        currentHrms: { type: string, examples: [SAP SuccessFactors, ZingHR] }
+        groupStructure:
+          type: object
+          description: Free-form JSON (entities, subsidiaries, listing status).
+        notes: { type: string }
+
+    Client:
+      allOf:
+        - { $ref: "#/components/schemas/ClientInput" }
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+            rfpCount: { type: integer }
+            createdAt: { type: string, format: date-time }
+
+    RfpStatus:
+      type: string
+      enum: [draft, parsing, questions_ready, drafting, in_review, approved, submitted, won, lost]
+
+    EngagementType:
+      type: string
+      enum: [hris_implementation, advisory, joint_bid, managed_services]
+
+    Owner:
+      type: string
+      enum: [kognoz, darwinbox, joint, not_applicable]
+
+    RfpInput:
+      type: object
+      required: [clientId, title, engagementType]
+      properties:
+        clientId: { type: string, format: uuid }
+        title: { type: string }
+        engagementType: { $ref: "#/components/schemas/EngagementType" }
+        bidderOfRecord: { type: string, enum: [kognoz, darwinbox, joint] }
+        dueDate: { type: string, format: date }
+
+    RfpPatch:
+      type: object
+      properties:
+        title: { type: string }
+        status: { $ref: "#/components/schemas/RfpStatus" }
+        dueDate: { type: string, format: date }
+        contextSummary: { type: string }
+        outcomeNotes: { type: string }
+
+    RfpSummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        clientName: { type: string }
+        title: { type: string }
+        status: { $ref: "#/components/schemas/RfpStatus" }
+        dueDate: { type: string, format: date }
+        counters:
+          type: object
+          properties:
+            questions: { type: integer }
+            drafted: { type: integer }
+            approved: { type: integer }
+            flagged: { type: integer }
+
+    Rfp:
+      allOf:
+        - { $ref: "#/components/schemas/RfpSummary" }
+        - type: object
+          properties:
+            clientId: { type: string, format: uuid }
+            engagementType: { $ref: "#/components/schemas/EngagementType" }
+            bidderOfRecord: { type: string }
+            contextSummary: { type: string }
+            documents:
+              type: array
+              items: { $ref: "#/components/schemas/RfpDocument" }
+            sections:
+              type: array
+              items:
+                type: object
+                properties:
+                  id: { type: string, format: uuid }
+                  title: { type: string }
+                  refCode: { type: string }
+                  sortOrder: { type: integer }
+            createdBy: { type: string, format: uuid }
+            createdAt: { type: string, format: date-time }
+            updatedAt: { type: string, format: date-time }
+
+    DocumentKind:
+      type: string
+      enum: [rfp_main, appendix, client_pointers, our_prior_response, other]
+
+    RfpDocument:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        kind: { $ref: "#/components/schemas/DocumentKind" }
+        fileName: { type: string }
+        mime: { type: string }
+        pageCount: { type: integer }
+        parseStatus: { type: string, enum: [pending, parsing, parsed, failed] }
+        createdAt: { type: string, format: date-time }
+
+    QuestionType:
+      type: string
+      enum: [compliance, descriptive, pricing, yes_no, attachment]
+
+    QuestionInput:
+      type: object
+      properties:
+        sectionId: { type: string, format: uuid }
+        refNo: { type: string }
+        questionText: { type: string }
+        questionType: { $ref: "#/components/schemas/QuestionType" }
+        isMandatory: { type: boolean }
+        owner: { $ref: "#/components/schemas/Owner" }
+        moduleHint: { type: string, examples: [core_hr, payroll, recruiting, performance, learning, advisory] }
+        sortOrder: { type: integer }
+
+    Question:
+      allOf:
+        - { $ref: "#/components/schemas/QuestionInput" }
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+            rfpId: { type: string, format: uuid }
+            rawMeta:
+              type: object
+              description: Original row/cell data as received from the client.
+            createdAt: { type: string, format: date-time }
+
+    ResponseStatus:
+      type: string
+      enum: [none, ai_draft, edited, approved, flagged]
+
+    Compliance:
+      type: string
+      enum: [fully, partial, via_customization, via_partner, not_supported, na]
+
+    Citation:
+      type: object
+      properties:
+        sourceType: { type: string, enum: [kb_entry, approved_answer, rfp_document] }
+        sourceId: { type: string, format: uuid }
+        title: { type: string }
+        similarity: { type: number }
+        excerpt: { type: string }
+
+    Revision:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        version: { type: integer }
+        draftText: { type: string }
+        finalText: { type: string }
+        generatedBy: { type: string, description: "`model` or a user id" }
+        model: { type: string }
+        promptVersion: { type: string }
+        instruction: { type: string }
+        citations:
+          type: array
+          items: { $ref: "#/components/schemas/Citation" }
+        createdAt: { type: string, format: date-time }
+
+    ResponseSummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        status: { $ref: "#/components/schemas/ResponseStatus" }
+        compliance: { $ref: "#/components/schemas/Compliance" }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+        currentText: { type: string }
+        assigneeId: { type: string, format: uuid }
+        approvedBy: { type: string, format: uuid }
+        approvedAt: { type: string, format: date-time }
+
+    ResponseDetail:
+      allOf:
+        - { $ref: "#/components/schemas/ResponseSummary" }
+        - type: object
+          properties:
+            questionId: { type: string, format: uuid }
+            openPoints:
+              type: array
+              items: { type: string }
+              description: Things the model could not resolve; feed into CHRO questions.
+            revisions:
+              type: array
+              items: { $ref: "#/components/schemas/Revision" }
+
+    ResponsePatch:
+      type: object
+      properties:
+        finalText: { type: string }
+        compliance: { $ref: "#/components/schemas/Compliance" }
+        status: { type: string, enum: [edited, approved, flagged] }
+        assigneeId: { type: string, format: uuid }
+        promoteToKb: { type: boolean }
+        flagReason: { type: string }
+
+    QuestionWithResponse:
+      type: object
+      properties:
+        question: { $ref: "#/components/schemas/Question" }
+        response:
+          oneOf:
+            - { $ref: "#/components/schemas/ResponseSummary" }
+            - { type: "null" }
+
+    ChroTheme:
+      type: string
+      enum: [mandate_vision, scope_structure, operating_model, tech_ai, prioritization, governance_culture]
+
+    ChroQuestion:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        theme: { $ref: "#/components/schemas/ChroTheme" }
+        questionText: { type: string }
+        rationale: { type: string }
+        sortOrder: { type: integer }
+        status: { type: string, enum: [suggested, kept, dropped] }
+
+    KbEntryType:
+      type: string
+      enum: [darwinbox_capability, kognoz_service, case_study, boilerplate]
+
+    KbEntryInput:
+      type: object
+      required: [entryType, body]
+      properties:
+        entryType: { $ref: "#/components/schemas/KbEntryType" }
+        product: { type: string }
+        module: { type: string }
+        featureName: { type: string }
+        body: { type: string }
+        availability: { type: string, enum: [standard, configurable, roadmap, not_available] }
+        tags: { type: array, items: { type: string } }
+        sourceId: { type: string, format: uuid }
+
+    KbEntry:
+      allOf:
+        - { $ref: "#/components/schemas/KbEntryInput" }
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+            isActive: { type: boolean }
+            updatedAt: { type: string, format: date-time }
+
+    ApprovedAnswer:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        canonicalQuestion: { type: string }
+        canonicalAnswer: { type: string }
+        module: { type: string }
+        tags: { type: array, items: { type: string } }
+        originRfpId: { type: string, format: uuid }
+        reuseCount: { type: integer }
+        lastUsedAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+
+    GenerationJob:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        rfpId: { type: string, format: uuid }
+        jobType: { type: string, enum: [parse, extract, draft, chro, export, kb_ingest] }
+        status: { type: string, enum: [queued, running, completed, failed, cancelled] }
+        progressDone: { type: integer }
+        progressTotal: { type: integer }
+        error: { type: string }
+        startedAt: { type: string, format: date-time }
+        finishedAt: { type: string, format: date-time }
+
+    Export:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        rfpId: { type: string, format: uuid }
+        format: { type: string, enum: [xlsx, docx, pptx] }
+        brandTemplateId: { type: string, format: uuid }
+        fileName: { type: string }
+        sizeBytes: { type: integer }
+        createdBy: { type: string, format: uuid }
+        createdAt: { type: string, format: date-time }
+
+    BrandTemplateInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        logoUrl: { type: string, format: uri }
+        primaryColor: { type: string, pattern: "^#[0-9A-Fa-f]{6}$" }
+        secondaryColor: { type: string, pattern: "^#[0-9A-Fa-f]{6}$" }
+        fontFamily: { type: string }
+        footerText: { type: string }
+        docxTemplateUrl: { type: string, format: uri }
+        pptxTemplateUrl: { type: string, format: uri }
+
+    BrandTemplate:
+      allOf:
+        - { $ref: "#/components/schemas/BrandTemplateInput" }
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+            isDefault: { type: boolean }

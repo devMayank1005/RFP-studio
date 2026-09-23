@@ -34,6 +34,10 @@ export function detectKind(fileName: string, mime?: string | null): ParsedKind |
   return BY_EXTENSION[ext] ?? (mime ? (BY_MIME[mime.toLowerCase()] ?? null) : null);
 }
 
+/**
+ * Parse a file into the normalised `ParsedDocument`, dispatching on `detectKind`.
+ * @throws {UnsupportedDocumentError} When neither extension nor mime type names a parser.
+ */
 export async function parseDocument(input: ParseInput): Promise<ParsedDocument> {
   const kind = detectKind(input.fileName, input.mime);
   switch (kind) {

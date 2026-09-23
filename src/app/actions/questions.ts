@@ -31,6 +31,11 @@ const patchSchema = z.object({
 });
 export type QuestionPatch = z.infer<typeof patchSchema>;
 
+/**
+ * Patch one question's fields during setup.
+ * @throws {ActionError} If the role cannot confirm questions, the RFP is not in the workspace, questions are already confirmed, the patch fails validation, or the question is not on this RFP.
+ * @sideEffects Updates `rfp_questions` and writes one `audit_log` row; revalidates the questions step.
+ */
 export async function updateQuestion(rfpId: string, questionId: string, patch: QuestionPatch): Promise<ActionResult> {
   return runAction(async () => {
     const { session } = await requireEditableRfp(rfpId);
@@ -47,6 +52,11 @@ export async function updateQuestion(rfpId: string, questionId: string, patch: Q
   });
 }
 
+/**
+ * Delete the selected questions during setup.
+ * @throws {ActionError} If the role cannot confirm questions, the RFP is not in the workspace, or questions are already confirmed.
+ * @sideEffects Deletes from `rfp_questions` and writes one `audit_log` row; revalidates the questions step.
+ */
 export async function deleteQuestions(rfpId: string, questionIds: string[]): Promise<ActionResult<{ deleted: number }>> {
   return runAction(async () => {
     const { session } = await requireEditableRfp(rfpId);
@@ -140,6 +150,11 @@ export async function splitQuestion(rfpId: string, questionId: string, parts: st
   });
 }
 
+/**
+ * Add a section at the end of the RFP's list.
+ * @throws {ActionError} If the role cannot confirm questions, the RFP is not in the workspace, or questions are already confirmed.
+ * @sideEffects Inserts one `rfp_sections` row (no audit row); revalidates the questions step.
+ */
 export async function createSection(rfpId: string, title: string): Promise<ActionResult<{ sectionId: string }>> {
   return runAction(async () => {
     await requireEditableRfp(rfpId);

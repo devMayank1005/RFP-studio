@@ -81,6 +81,11 @@ export async function uploadDocuments(rfpId: string, formData: FormData): Promis
   });
 }
 
+/**
+ * Remove an uploaded document and its files while the RFP is still in setup.
+ * @throws {ActionError} If the role cannot edit, the RFP is not in the workspace, questions are already confirmed, or the document is not on this RFP.
+ * @sideEffects Deletes the `rfp_documents` row and its Blob files (original and parsed text); writes one `audit_log` row; revalidates the upload step.
+ */
 export async function deleteDocument(rfpId: string, documentId: string): Promise<ActionResult> {
   return runAction(async () => {
     const session = await requireCan("rfp.edit");

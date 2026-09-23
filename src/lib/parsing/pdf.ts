@@ -10,6 +10,7 @@ function tidy(text: string): string {
     .trim();
 }
 
+/** Extract a PDF page by page with unpdf; `text` joins the pages under page markers so a citation can name its page. */
 export async function parsePdf(fileName: string, buffer: Buffer | ArrayBuffer | Uint8Array): Promise<ParsedDocument> {
   const bytes = buffer instanceof Uint8Array ? new Uint8Array(buffer) : new Uint8Array(buffer);
   const pdf = await getDocumentProxy(bytes);

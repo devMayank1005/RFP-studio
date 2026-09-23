@@ -42,6 +42,7 @@ function capped(lines: string[], budget: number): string {
   return out.join("\n");
 }
 
+/** The user turn for the summary call: client, RFP, sections, coverage and compliance, the brief, and the approved answers within their budget. */
 export function buildSummaryUserMessage(input: SummaryInput): string {
   const compliance = COMPLIANCE_LEVELS.filter((c) => input.counts[c] > 0)
     .map((c) => `${COMPLIANCE_LABEL[c]} ${input.counts[c]}`)
@@ -78,6 +79,12 @@ function tidy(list: string[], max: number): string[] {
     .slice(0, max);
 }
 
+/**
+ * The model's output tidied to what the export stores: whitespace collapsed,
+ * blanks dropped, at most five paragraphs and six highlights.
+ *
+ * @throws {Error} When no paragraph survives — an empty summary is a failed call, not a document.
+ */
 export function sanitiseSummary(out: SummaryOutput): ExecutiveSummary {
   const paragraphs = tidy(out.paragraphs, MAX_PARAGRAPHS);
   if (!paragraphs.length) throw new Error("model returned no usable paragraphs for the executive summary");

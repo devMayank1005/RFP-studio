@@ -40,6 +40,7 @@ export interface WorkspaceSection {
   sortOrder: number;
 }
 
+/** The review grid: every question with its current response state, plus the sections. Null when the RFP is not in the workspace. */
 export async function getWorkspaceRows(workspaceId: string, rfpId: string, executor: Executor = db): Promise<{ rows: WorkspaceRow[]; sections: WorkspaceSection[] } | null> {
   if (!isUuid(rfpId)) return null;
   const [owned] = await executor.select({ id: rfps.id }).from(rfps).where(and(eq(rfps.id, rfpId), eq(rfps.workspaceId, workspaceId))).limit(1);

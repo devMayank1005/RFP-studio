@@ -11,6 +11,7 @@ import { argb, COMPLIANCE_INK, docxFont, INK_HEX, STATUS_INK, xlsxColumnPlan, xl
 
 const WHITE = "FFFFFFFF";
 
+/** An ink name as ExcelJS ARGB, brand colours falling back to the Kognoz defaults. */
 export function inkArgb(ink: Ink, brand: ExportBrand): string {
   switch (ink) {
     case "primary":
@@ -24,6 +25,7 @@ export function inkArgb(ink: Ink, brand: ExportBrand): string {
   }
 }
 
+/** Build the fresh workbook — "Responses" then "Summary" — and return its bytes. */
 export async function renderXlsx(model: ExportModel, brand: ExportBrand): Promise<Buffer> {
   const font = docxFont(brand.fontFamily);
   const wb = new ExcelJS.Workbook();
