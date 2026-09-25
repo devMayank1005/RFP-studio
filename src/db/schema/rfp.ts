@@ -83,7 +83,7 @@ export const rfpDocuments = pgTable(
     sizeBytes: integer("size_bytes").notNull().default(0),
     pageCount: integer("page_count"),
     parseStatus: parseStatusEnum("parse_status").notNull().default("pending"),
-    /** Blob URL of the ParsedDocument JSON produced by src/lib/parsing. */
+    /** Storage handle of the ParsedDocument JSON from src/lib/parsing: an object key, or a Vercel Blob URL on rows from before September 2026. */
     parsedTextUrl: text("parsed_text_url"),
     parseError: text("parse_error"),
     uploadedBy: text("uploaded_by").references(() => user.id, { onDelete: "set null" }),

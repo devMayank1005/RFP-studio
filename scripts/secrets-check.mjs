@@ -6,7 +6,8 @@
  * Two checks over TRACKED files only (git ls-files):
  *   1. no env file other than .env.example is tracked;
  *   2. no line matches a known credential shape (Anthropic, Inngest, Vercel
- *      Blob, Neon passwords, or a password inside a connection string).
+ *      Blob, Neon passwords and storage secrets, or a password inside a
+ *      connection string).
  * Test fixtures and the redaction module itself are skipped — they contain
  * deliberately fake keys.
  */
@@ -19,6 +20,8 @@ const PATTERNS = [
   ["Inngest event key", /\bINNGEST_EVENT_KEY=\S{8,}/],
   ["Vercel Blob token", /vercel_blob_rw_[A-Za-z0-9_]{8,}/],
   ["Neon password", /\bnpg_[A-Za-z0-9]{8,}/],
+  ["Neon storage secret", /\bnsk_(?:live|test)_[A-Za-z0-9]{16,}/],
+  ["storage secret in an env assignment", /\bAWS_SECRET_ACCESS_KEY=\S{16,}/],
   ["password in a connection string", /[a-z]+:\/\/[^:/\s@"'`]+:[^@\s"'`]{4,}@[^\s"'`]+/],
 ];
 

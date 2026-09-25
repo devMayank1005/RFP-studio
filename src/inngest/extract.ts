@@ -178,7 +178,7 @@ async function planUnits(documentId: string, parsedTextUrl: string, doc: ParsedD
   return units;
 }
 
-/** One model call: re-reads the parsed document (cheap, from Blob) and extracts exactly this unit's rows or pages. */
+/** One model call: re-reads the parsed document (cheap, from storage) and extracts exactly this unit's rows or pages. */
 async function extractUnit(unit: Unit, opts: { knownSections: string[]; startIndex: number }): Promise<UnitResult> {
   const parsed = await loadParsed(unit.parsedTextUrl);
   if (unit.sheetIndex === null) {

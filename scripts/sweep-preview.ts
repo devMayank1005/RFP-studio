@@ -1,6 +1,6 @@
 /**
  * What the next sweep would do, without doing it: jobs to retire, KB sources
- * to fail, Blob files to delete. Run it before the first real sweep on a
+ * to fail, stored files to delete. Run it before the first real sweep on a
  * database, and whenever storage looks off.
  *
  *   pnpm sweep:preview

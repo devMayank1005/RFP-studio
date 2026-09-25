@@ -2,7 +2,7 @@ import { STALE_QUEUE_MS } from "./jobs";
 
 /**
  * What the sweeper does, decided without I/O: which live jobs are dead, and
- * which Blob files nobody references any more. The Inngest cron in
+ * which stored files nobody references any more. The Inngest cron in
  * src/inngest/sweep.ts and `pnpm sweep:preview` both run these rules.
  */
 
@@ -44,6 +44,7 @@ export function classifyJobs(rows: SweepJobRow[], now: Date): ReapDecision[] {
   return out;
 }
 
+/** One stored object as the sweeper sees it. `url` is the handle rows hold: an object key, or a Vercel Blob URL for files from before September 2026. */
 export interface BlobFile {
   pathname: string;
   url: string;

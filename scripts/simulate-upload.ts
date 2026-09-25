@@ -1,6 +1,6 @@
 /**
  * Dev harness: attach a local file to an RFP exactly as the upload action
- * does (private Blob → rfp_documents row → parse job → Inngest event),
+ * does (private bucket → rfp_documents row → parse job → Inngest event),
  * without a browser. Useful for driving the pipeline from the shell.
  *
  *   pnpm exec tsx scripts/simulate-upload.ts <rfpId> <file> [kind]
@@ -20,7 +20,7 @@ import { createJob } from "@/db/jobs";
 import { rfpDocuments, rfps } from "@/db/schema";
 import { DOCUMENT_KINDS, type DocumentKind } from "@/domain/enums";
 import { documentUploaded, inngest } from "@/inngest/client";
-import { rfpUploadPath, uploadPrivate } from "@/lib/blob";
+import { rfpUploadPath, uploadPrivate } from "@/lib/storage";
 import { detectKind } from "@/lib/parsing";
 
 const MIME: Record<string, string> = {

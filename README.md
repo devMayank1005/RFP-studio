@@ -6,14 +6,14 @@ review them in a keyboard-driven grid.
 
 **Stack:** Next.js 16 (App Router) · React 19 · Tailwind v4 + shadcn/ui · TanStack Query/Virtual ·
 Neon Postgres + pgvector via Drizzle · Better Auth (Microsoft Entra SSO) · Inngest · Anthropic SDK
-(Claude Sonnet 5 / Opus 5) · Voyage AI embeddings · Vercel Blob.
+(Claude Sonnet 5 / Opus 5) · Voyage AI embeddings · Neon Object Storage.
 
 ## Run it locally
 
 ```bash
 pnpm install
 cp .env.example .env.local          # then fill it in — see "Environment"
-vercel link && vercel env pull .env.local --yes   # DATABASE_URL, BLOB token, etc. from the Vercel project
+vercel link && vercel env pull .env.local --yes   # DATABASE_URL, storage credentials, etc. from the Vercel project
 pnpm db:migrate && pnpm db:seed     # schema, workspace, brand template, clients, KB entries, demo RFP
 pnpm kb:seed                        # embeds the knowledge base (needs VOYAGE_API_KEY)
 pnpm dev --port 3001                # 3000 is usually taken by Social Studio on this machine
@@ -32,7 +32,8 @@ comment cannot poison an HTTP header.
 | Variable | Purpose |
 |---|---|
 | `DATABASE_URL`, `DATABASE_URL_UNPOOLED` | Neon (Vercel Marketplace). Pooled for the app, direct for migrations. |
-| `BLOB_READ_WRITE_TOKEN` | Vercel Blob (private store `rfp-studio-uploads`). |
+| `AWS_ENDPOINT_URL_S3`, `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `STORAGE_BUCKET` | Neon Object Storage: the private bucket `rfp-studio-files` on the database's branch, reached over path-style S3. `pnpm storage:check` proves the five are right. |
+| `BLOB_READ_WRITE_TOKEN` | Only for files from before September 2026, still in the retired Vercel Blob store `rfp-studio-uploads`; see *File storage* below. |
 | `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` | Session signing; the site origin. |
 | `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET`, `MICROSOFT_TENANT_ID` | Entra app registration. Tenant GUID locks sign-in to the Kognoz directory. |
 | `ALLOWED_EMAIL_DOMAINS` | Comma-separated. Excludes tenant guests. |
@@ -46,7 +47,8 @@ path, not the site root. Keep `http://localhost:3001/api/auth/callback/microsoft
 
 ## Deploying
 
-The build needs no secrets. Neon and Blob variables come from the integrations; the auth instance
+The build needs no secrets. The Neon variables come from the integration and the storage variables are
+set by hand (Settings → Environment Variables, Production); the auth instance
 is constructed on first use rather than at import, and the Claude and Voyage keys are read without
 throwing — `next build` evaluates every route module while collecting page data, and the first
 Vercel build died on the allowlist check for exactly that reason. A deployment without the SSO variables therefore builds
@@ -103,7 +105,7 @@ src/db/          Drizzle schema, queries, jobs, audit, seed
 src/components/  shell, chips, dashboard, wizard, workspace, kb (knowledge-base screen), exports
 ```
 
-Flow: **New RFP** (client) → **Upload** (private Blob, parse job) → **Questions** (extraction job:
+Flow: **New RFP** (client) → **Upload** (private bucket, parse job) → **Questions** (extraction job:
 column roles, per-chunk classification, sections, context brief) → **Confirm** (optionally import a
 vendor's earlier answers) → **Workspace** (draft with Claude, review with J/K/A, regenerate with an
 instruction, every revision and citation kept; **Add to KB** turns an approved answer into a reusable,
@@ -122,7 +124,7 @@ dark mode keeps its own primary), and the voice guide that opens every draft's s
 **Knowledge base** (`/kb`): four tabs — Darwinbox capabilities by module, Kognoz services, approved answers
 with reuse counts, and sources. Entries are edited in a side sheet (`N` new, `J/K` move, `Enter` open, `/` search)
 and re-embedded when their text changes; they are deactivated rather than deleted so past citations still
-resolve. "Ingest a document" uploads a PDF/DOCX to private Blob and runs the `ingest-kb-source` Inngest job,
+resolve. "Ingest a document" uploads a PDF/DOCX to the private bucket and runs the `ingest-kb-source` Inngest job,
 whose progress lives on the `kb_sources` row (migration 0003).
 
 **Quick Q&A** (`/quick`): the short path. Paste questions (or drop a client's questionnaire), add deal context,
@@ -145,7 +147,7 @@ answers, an overview table, every section with its questions, answers, sources a
 CHRO questions as an appendix — colours, font, logo and footer from the brand template. Every question is
 exported with its current answer; unapproved ones are marked (a Status column, or an amber cell with a note)
 and the page says how many there are before you build; tick "Only approved answers" to leave the rest blank.
-Builds run as the `build-export` Inngest job, land in private Blob and download through a session-gated route;
+Builds run as the `build-export` Inngest job, land in the private bucket and download through a session-gated route;
 the history keeps every file with who built it. The deck is a later milestone.
 
 Opt-in end-to-end cases: `E2E_WITH_MODEL=1` runs the cases that call Claude (a Word export, a Quick Q&A
@@ -211,17 +213,26 @@ Better Auth's own limiter runs against the database too (`rateLimit` table): 10 
 
 **Sweeper.** The `sweep` Inngest function runs every 10 minutes (`src/inngest/sweep.ts`, rules in
 `src/domain/sweep.ts`): a job still `queued` after 5 minutes or `running` after 30 is marked failed with a
-reason (and its export, document or KB source row with it); files in Blob storage whose RFP is gone are
+reason (and its export, document or KB source row with it); files in the bucket whose RFP is gone are
 deleted at once, and unreferenced files of live RFPs or KB sources after a day; rate-limit rows older than an
 hour are dropped. `pnpm sweep:preview` prints what the next run would do without doing it.
+
+**File storage.** Uploads, parsed JSON and exports live in a private bucket on the database's own Neon
+branch (`src/lib/storage.ts`); rows hold the object key and nothing is ever served to the browser directly.
+A bad credential, a missing bucket or a dead store reads as one sentence on the form, never the crash screen.
+Files written before September 2026 still hold the URL of the retired Vercel Blob store `rfp-studio-uploads`,
+which is suspended: they cannot be re-parsed, ingested or downloaded until the store is resumed on Vercel
+(Storage → the store → billing), after which `pnpm storage:migrate --dry-run` lists them and
+`pnpm storage:migrate` copies each into the bucket and repoints its row. Re-uploading the file is the
+alternative. `pnpm storage:check` proves a bucket is reachable from wherever it runs.
 
 **Fixture accounts.** `scripts/dev-session.mjs` creates `dev.<role>@rfp-studio.invalid` users for local
 verification and the e2e suite, and production shares the database. They cannot sign in, and Settings → Team
 hides them from real people (`visibleMembers` in `src/domain/access.ts`); only a fixture session sees them.
 
 **Secrets.** `pnpm lint` (so every Vercel build) runs `scripts/secrets-check.mjs`: no env file other than
-`.env.example` may be tracked, and no tracked line may look like an Anthropic, Inngest, Vercel Blob or Neon
-credential or a password inside a connection string. Every new variable goes into `.env.example` with a
+`.env.example` may be tracked, and no tracked line may look like an Anthropic, Inngest, Vercel Blob, Neon or
+storage credential or a password inside a connection string. Every new variable goes into `.env.example` with a
 placeholder, and `/api/inngest` refuses to serve (503) in production until both Inngest keys are set.
 
 ## Scripts
@@ -231,6 +242,7 @@ pnpm dev · build · lint · typecheck · test · test:e2e
 pnpm db:generate · db:migrate · db:push · db:studio · db:seed · db:ping · db:check-auth
 pnpm db:rls-check · db:counts-check              prove row-level security bites / dashboard counters match a recount
 pnpm secrets:check · sweep:preview               refuse credential-shaped tracked text / show what the sweeper would reap and delete
+pnpm storage:check · storage:migrate · storage:delete   probe the bucket / move retired-Blob files across / delete objects by handle
 pnpm kb:seed                                    embed KB entries / approved answers missing a vector
 pnpm kb:ingest <file> [--dry-run]               PDF/DOCX product doc → KB entries (same as the Sources tab's "Ingest a document")
 pnpm exec tsx scripts/extract-one.ts <file>     run extraction on a file and print what it found

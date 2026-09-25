@@ -11,7 +11,7 @@ import { generationJobs, rfpDocuments, rfps } from "@/db/schema";
 import { DOCUMENT_KINDS, type DocumentKind } from "@/domain/enums";
 import { documentUploaded, extractRequested } from "@/inngest/client";
 import { ActionError, requireCan, requireRfp, runAction, type ActionResult } from "@/lib/actions";
-import { deletePrivate, rfpUploadPath, uploadPrivate } from "@/lib/blob";
+import { deletePrivate, rfpUploadPath, uploadPrivate } from "@/lib/storage";
 import { requireJobRunner, sendJobEvent } from "@/lib/jobs";
 import { detectKind } from "@/lib/parsing";
 import { requireBudget } from "@/lib/rate-limit";
@@ -24,7 +24,7 @@ async function markParseFailed(documentId: string, reason: string) {
 }
 
 /**
- * Wizard step 2. Each file goes to private Blob storage, gets a document row
+ * Wizard step 2. Each file goes to the private storage bucket, gets a document row
  * and a parse job, and the job is handed to Inngest. Returns the job ids so
  * the client can poll them.
  */
@@ -84,7 +84,7 @@ export async function uploadDocuments(rfpId: string, formData: FormData): Promis
 /**
  * Remove an uploaded document and its files while the RFP is still in setup.
  * @throws {ActionError} If the role cannot edit, the RFP is not in the workspace, questions are already confirmed, or the document is not on this RFP.
- * @sideEffects Deletes the `rfp_documents` row and its Blob files (original and parsed text); writes one `audit_log` row; revalidates the upload step.
+ * @sideEffects Deletes the `rfp_documents` row and its stored files (original and parsed text); writes one `audit_log` row; revalidates the upload step.
  */
 export async function deleteDocument(rfpId: string, documentId: string): Promise<ActionResult> {
   return runAction(async () => {

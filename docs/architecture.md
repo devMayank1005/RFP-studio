@@ -49,7 +49,7 @@ Kognoz's internal tool to turn a client RFP into a branded, line-wise proposal r
 | AI | Anthropic API — Claude Sonnet for bulk drafting/extraction, Claude Opus for the CHRO question set and final narrative polish | Structured JSON outputs for extraction/drafts; tool use for retrieval. |
 | Embeddings | Voyage AI (`voyage-3`) or OpenAI `text-embedding-3-small` | Anthropic doesn't ship embeddings; Voyage is Anthropic's recommended partner. |
 | Background jobs | Inngest (Vercel-native, free tier) | Step functions with retries; each question is a durable step, so a 300-item run survives timeouts and can be resumed. |
-| File storage | Vercel Blob | Uploaded RFPs, generated exports. |
+| File storage | Neon Object Storage (S3-compatible private bucket on the database's branch) | Uploaded RFPs, parsed JSON, generated exports. Rows hold the object key; files from before September 2026 still hold a Vercel Blob URL until `pnpm storage:migrate` runs. |
 | Parsing | SheetJS (xlsx), `unpdf` (pdf), `mammoth` (docx) → Claude for question extraction | Deterministic text extraction first, AI only for structuring. |
 | Export | `docx` npm, `pptxgenjs`, SheetJS | Brand templates stored as JSON + logo assets. |
 | Auth | Auth.js with Google Workspace SSO (Kognoz domain) | Zero password management. |
@@ -78,7 +78,7 @@ Kognoz's internal tool to turn a client RFP into a branded, line-wise proposal r
                     │ • draft_responses  │    └──────────────────────┘
                     │ • generate_chro    │
                     │ • build_export     │    ┌──────────────────────┐
-                    └─────────┬──────────┘    │ Vercel Blob          │
+                    └─────────┬──────────┘    │ Neon Object Storage  │
                               │               │ uploads · exports    │
                               ▼               └──────────────────────┘
                     ┌────────────────────┐
@@ -214,7 +214,7 @@ Indexes that matter: `rfp_questions(rfp_id, sort_order)`, `responses(question_id
 ## 6. Backend flow
 
 ### 6.1 Ingest → questions
-1. **Upload** → `rfp_documents` row, file to Blob, enqueue `parse_rfp`.
+1. **Upload** → `rfp_documents` row, file to the storage bucket, enqueue `parse_rfp`.
 2. **parse_rfp**: deterministic text/table extraction per file type. xlsx rows are kept as JSON with their original headers (this becomes `raw_meta`).
 3. **extract_questions**: Claude gets the parsed content in chunks and returns strict JSON — `{section, ref_no, question_text, question_type, is_mandatory, module_hint, owner_guess}`. Client "pointers" (like the demerger context you shared) are summarised into `rfps.context_summary`, not treated as questions.
 4. **Human checkpoint**: user sees the extracted list, merges/splits/deletes, confirms. Status → `questions_ready`. Nothing is drafted before this.

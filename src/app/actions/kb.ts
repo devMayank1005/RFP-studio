@@ -15,7 +15,7 @@ import { engineConfigError } from "@/engine/client";
 import { approvedAnswerEmbedText, embedConfigError, embedDocuments, kbEntryEmbedText } from "@/engine/embed";
 import { kbIngestRequested } from "@/inngest/client";
 import { ActionError, parseInput, requireCan, requireRfp, runAction, type ActionResult } from "@/lib/actions";
-import { kbSourcePath, uploadPrivate } from "@/lib/blob";
+import { kbSourcePath, uploadPrivate } from "@/lib/storage";
 import { promoteResponse } from "@/lib/promote";
 import { requireJobRunner, sendJobEvent } from "@/lib/jobs";
 import { detectKind } from "@/lib/parsing";
@@ -174,7 +174,7 @@ const MAX_INGEST_BYTES = 20 * 1024 * 1024;
 
 /**
  * Upload a product document and queue the job that reads it into entries.
- * The file goes to private Blob storage; the kb_sources row carries the
+ * The file goes to the private storage bucket; the kb_sources row carries the
  * job's status so the Sources tab can show it without another table.
  */
 export async function ingestKbDocument(formData: FormData): Promise<ActionResult<{ sourceId: string }>> {

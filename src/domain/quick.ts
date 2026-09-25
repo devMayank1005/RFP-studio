@@ -13,7 +13,7 @@ import { clipText } from "./search";
  * RFP tables underneath. What the form accepts, how a session is named,
  * how a paste becomes pages the extractor can read, the deterministic
  * fallback when the model finds nothing, and which job the progress strip
- * shows. Blob, database and Inngest live in src/lib, src/db and src/inngest.
+ * shows. Storage, database and Inngest live in src/lib, src/db and src/inngest.
  */
 
 export const QUICK_CLIENT_NAME = "Quick Q&A";

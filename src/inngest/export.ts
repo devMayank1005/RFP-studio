@@ -11,7 +11,7 @@ import { buildExportModel, EXPORT_FORMAT_META, exportFileName, type ExportBrand,
 import { flattenSummary, type SummaryInput } from "@/domain/summary";
 import { engineConfigError } from "@/engine/client";
 import { generateExecutiveSummary } from "@/engine/summary";
-import { readPrivate, rfpExportPath, uploadPrivate } from "@/lib/blob";
+import { readPrivate, rfpExportPath, uploadPrivate } from "@/lib/storage";
 import { renderers, resolveLogo } from "@/lib/export";
 import { failJob } from "@/lib/jobs";
 
@@ -21,7 +21,7 @@ import { loadParsed } from "./parse";
 /**
  * Build one export file. Four durable steps for Word (the executive summary
  * is a model call), three for Excel. Rendering and uploading happen in one
- * step and only the blob URL crosses the step boundary — Inngest memoises
+ * step and only the storage handle crosses the step boundary — Inngest memoises
  * step results as JSON and a file must never travel that way.
  */
 export const buildExport = inngest.createFunction(

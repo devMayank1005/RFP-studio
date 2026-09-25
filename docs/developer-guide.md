@@ -265,7 +265,7 @@ Seed set: 0001 Next.js on Vercel · 0002 Inngest for jobs · 0003 Postgres over 
 | `bad-extraction.md` | Questions come out garbled — re-run with `chunking=rows` |
 | `export-failed.md` | Template asset missing / font not embedded |
 | `restore-deleted-rfp.md` | Soft-delete recovery within 30 days |
-| `rotate-secrets.md` | Anthropic key, Neon connection string, Blob token |
+| `rotate-secrets.md` | Anthropic key, Neon connection string, storage credential (`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`) |
 | `neon-branch-for-debug.md` | Create a DB branch from prod to reproduce a data bug safely |
 
 ---
@@ -276,7 +276,7 @@ Seed set: 0001 Next.js on Vercel · 0002 Inngest for jobs · 0003 Postgres over 
 git clone … && cd rfp-studio
 pnpm install
 cp .env.example .env.local      # fill: DATABASE_URL, ANTHROPIC_API_KEY, VOYAGE_API_KEY,
-                                #       BLOB_READ_WRITE_TOKEN, AUTH_GOOGLE_ID/SECRET, INNGEST_*
+                                #       AWS_* + STORAGE_BUCKET, AUTH_GOOGLE_ID/SECRET, INNGEST_*
 pnpm db:migrate && pnpm db:seed # seeds a demo client, one RFP, and 40 Darwinbox capability entries
 pnpm dev                        # app on :3000, Inngest dev server on :8288
 ```

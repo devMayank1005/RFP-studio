@@ -22,6 +22,9 @@
     "db:counts-check": "tsx scripts/db-counts-check.ts",
     "db:check-auth": "node scripts/check-auth-schema.mjs",
     "sweep:preview": "tsx scripts/sweep-preview.ts",
+    "storage:check": "tsx scripts/storage-check.ts",
+    "storage:delete": "tsx scripts/storage-delete.ts",
+    "storage:migrate": "tsx scripts/storage-migrate.ts",
     "kb:seed": "tsx scripts/kb-seed.ts",
     "kb:ingest": "tsx scripts/kb-ingest.ts",
     "inngest:dev": "npx inngest-cli@latest dev -u http://localhost:3001/api/inngest",
@@ -32,6 +35,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",
+    "@aws-sdk/client-s3": "^3.1140.0",
     "@hookform/resolvers": "^5.9.1",
     "@tanstack/react-query": "^5.102.8",
     "@tanstack/react-table": "^9.2.4",

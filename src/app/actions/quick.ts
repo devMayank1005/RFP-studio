@@ -18,7 +18,7 @@ import { engineConfigError } from "@/engine/client";
 import { embedConfigError } from "@/engine/embed";
 import { quickRequested } from "@/inngest/client";
 import { ActionError, requireCan, requireRfp, runAction, type ActionResult } from "@/lib/actions";
-import { putJson, rfpQuickPastePath, rfpUploadPath, uploadPrivate } from "@/lib/blob";
+import { putJson, rfpQuickPastePath, rfpUploadPath, uploadPrivate } from "@/lib/storage";
 import { requireJobRunner, sendJobEvent } from "@/lib/jobs";
 import { detectKind } from "@/lib/parsing";
 import { promoteResponse } from "@/lib/promote";

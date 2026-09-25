@@ -5,7 +5,7 @@ import { db } from "@/db/client";
 import { finishJob, markJobRunning, setJobProgress } from "@/db/jobs";
 import { getDocumentForJob } from "@/db/queries/documents";
 import { rfpDocuments } from "@/db/schema";
-import { getJson, putJson, readPrivate, rfpParsedPath } from "@/lib/blob";
+import { getJson, putJson, readPrivate, rfpParsedPath } from "@/lib/storage";
 import { parseDocument, type ParsedDocument } from "@/lib/parsing";
 import { failJob } from "@/lib/jobs";
 
@@ -13,7 +13,7 @@ import { documentUploaded, inngest } from "./client";
 
 /**
  * Deterministic text extraction for one uploaded file. Writes the
- * ParsedDocument JSON back to Blob and marks the document parsed; the
+ * ParsedDocument JSON back to storage and marks the document parsed; the
  * extraction job reads that JSON, never the original file again.
  */
 export const parseUploadedDocument = inngest.createFunction(

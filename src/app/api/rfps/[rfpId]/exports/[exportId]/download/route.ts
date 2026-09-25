@@ -3,7 +3,8 @@ import { NextResponse } from "next/server";
 import { withOrg } from "@/db/client";
 import { getExport } from "@/db/queries/exports";
 import { contentDisposition, EXPORT_FORMAT_META } from "@/domain/export";
-import { readPrivate } from "@/lib/blob";
+import { StorageUnavailableError } from "@/domain/storage";
+import { readPrivate } from "@/lib/storage";
 import { apiBudget } from "@/lib/rate-limit";
 import { getSession } from "@/lib/session";
 
@@ -23,7 +24,13 @@ export async function GET(_request: Request, ctx: RouteContext<"/api/rfps/[rfpId
   const row = await withOrg(session.workspaceId, (tx) => getExport(session.workspaceId, exportId, tx));
   if (!row || row.rfpId !== rfpId || row.status !== "done" || !row.fileUrl) return NextResponse.json({ error: "not found" }, { status: 404 });
 
-  const bytes = await readPrivate(row.fileUrl);
+  let bytes: Buffer;
+  try {
+    bytes = await readPrivate(row.fileUrl);
+  } catch (err) {
+    if (err instanceof StorageUnavailableError) return NextResponse.json({ error: err.message }, { status: err.missing ? 404 : 503 });
+    throw err;
+  }
   const meta = EXPORT_FORMAT_META[row.format];
   return new Response(new Uint8Array(bytes), {
     headers: {

@@ -6,7 +6,7 @@ import { bumpJobProgress, finishJob, markJobRunning, setJobProgress } from "@/db
 import { rfpDocuments, rfps } from "@/db/schema";
 import type { ExtractedQuestion } from "@/domain/extraction";
 import { questionsFromLines } from "@/domain/quick";
-import { putJson, readPrivate, rfpParsedPath } from "@/lib/blob";
+import { putJson, readPrivate, rfpParsedPath } from "@/lib/storage";
 import { parseDocument } from "@/lib/parsing";
 import { failJob } from "@/lib/jobs";
 
@@ -21,7 +21,7 @@ import { loadParsed } from "./parse";
  * spent on a wrong extraction (the ordinary draft job does the drafting).
  * Parsing happens here, not in the action, so a 20 MB PDF never meets a
  * request timeout; every step returns small JSON — the document itself
- * stays in Blob and is re-read by URL.
+ * stays in storage and is re-read by its handle.
  */
 export const quickIntake = inngest.createFunction(
   {

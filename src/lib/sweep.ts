@@ -7,7 +7,7 @@ import { finishExportRow } from "@/db/queries/exports";
 import { exports as exportsTable, generationJobs, kbSources, rfpDocuments, rfps } from "@/db/schema";
 import { STALE_RUN_MS, classifyJobs, orphanBlobs, type BlobFile } from "@/domain/sweep";
 import { StorageUnavailableError } from "@/domain/storage";
-import { deletePrivate, listPrivate } from "@/lib/blob";
+import { deletePrivate, listPrivate } from "@/lib/storage";
 import { reportError, reportEvent } from "@/lib/report";
 
 /**
@@ -55,8 +55,8 @@ async function listAll(prefix: string): Promise<BlobFile[]> {
 
 /**
  * Decides what the sweeper would do now without doing it: jobs to reap as failed,
- * sources to retire, orphaned blobs to delete, rate-limit rows to expire.
- * @sideEffects none — reads generation_jobs, kb_sources, Blob listings and rate_limits.
+ * sources to retire, orphaned files to delete, rate-limit rows to expire.
+ * @sideEffects none — reads generation_jobs, kb_sources, storage listings and rate_limits.
  */
 export async function planSweep(now = new Date()): Promise<SweepPlan> {
   const live = await db
@@ -111,7 +111,7 @@ export interface SweepResult {
 
 /**
  * Applies a sweep plan and returns the counts.
- * @sideEffects Marks generation_jobs failed, updates kb_sources, deletes Blob objects, deletes rate_limits rows.
+ * @sideEffects Marks generation_jobs failed, updates kb_sources, deletes storage objects, deletes rate_limits rows.
  */
 export async function runSweep(plan: SweepPlan, now = new Date()): Promise<SweepResult> {
   for (const job of plan.reap) {

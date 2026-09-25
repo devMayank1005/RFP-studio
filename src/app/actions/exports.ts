@@ -13,7 +13,7 @@ import { isStaleQueuedJob } from "@/domain/jobs";
 import { engineConfigError } from "@/engine/client";
 import { exportRequested } from "@/inngest/client";
 import { ActionError, parseInput, requireCan, requireRfp, runAction, type ActionResult } from "@/lib/actions";
-import { deletePrivate } from "@/lib/blob";
+import { deletePrivate } from "@/lib/storage";
 import { requireJobRunner, sendJobEvent } from "@/lib/jobs";
 import { requireBudget } from "@/lib/rate-limit";
 
@@ -85,7 +85,7 @@ export async function requestExport(rfpId: string, format: ExportFormat, options
 /**
  * Delete a finished export and its file.
  * @throws {ActionError} If the role cannot export, the RFP is not in the workspace, the export is not on this RFP, or its build is still queued or running.
- * @sideEffects Deletes the `exports` row and, best effort, its Blob file; writes one `audit_log` row; revalidates the exports page.
+ * @sideEffects Deletes the `exports` row and, best effort, its stored file; writes one `audit_log` row; revalidates the exports page.
  */
 export async function deleteExport(rfpId: string, exportId: string): Promise<ActionResult> {
   return runAction(async () => {

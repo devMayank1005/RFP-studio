@@ -8,7 +8,7 @@ import { isUuid } from "@/domain/ids";
 
 /**
  * Exports: the job-side read of everything a file needs, and the workspace-
- * scoped history the page shows. Blob I/O (the parsed workbook JSON, the
+ * scoped history the page shows. Storage I/O (the parsed workbook JSON, the
  * original upload) is the job's business, not this file's.
  */
 
@@ -188,7 +188,7 @@ export async function listExports(workspaceId: string, rfpId: string): Promise<E
   return rows.map(toRow);
 }
 
-/** One export with its blob URL, only if its RFP belongs to the workspace. Null otherwise. */
+/** One export with its storage handle, only if its RFP belongs to the workspace. Null otherwise. */
 export async function getExport(workspaceId: string, exportId: string, executor: Executor = db): Promise<(ExportRow & { fileUrl: string | null }) | null> {
   if (!isUuid(exportId)) return null;
   const [row] = await executor
@@ -262,9 +262,9 @@ export async function activeExport(rfpId: string, format: ExportFormat): Promise
 }
 
 /**
- * Remove an export row, handing back its blob URL so the caller can delete the file too.
+ * Remove an export row, handing back its storage handle so the caller can delete the file too.
  * @returns The deleted row's `fileUrl`, or null when nothing matched.
- * @sideEffects Deletes from `exports`; the blob itself is the caller's to remove.
+ * @sideEffects Deletes from `exports`; the file itself is the caller's to remove.
  */
 export async function deleteExportRow(exportId: string): Promise<{ fileUrl: string | null } | null> {
   const [row] = await db.delete(exportsTable).where(eq(exportsTable.id, exportId)).returning({ fileUrl: exportsTable.fileUrl });

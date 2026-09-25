@@ -5,7 +5,7 @@ import { chunkPages } from "@/domain/extraction";
 import { sheetPrecedents, type Precedent } from "@/domain/ingest";
 import { resolveColumns } from "@/engine/columns";
 import { INGEST_CHARS_PER_CHUNK, extractKbEntries, extractPrecedents } from "@/engine/ingest";
-import { readPrivate } from "@/lib/blob";
+import { readPrivate } from "@/lib/storage";
 import { parseDocument, type ParsedDocument } from "@/lib/parsing";
 import { redactSecrets } from "@/lib/redact";
 import { reportError } from "@/lib/report";

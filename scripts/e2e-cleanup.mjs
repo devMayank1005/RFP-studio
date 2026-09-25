@@ -4,7 +4,7 @@
  * questions and jobs cascade from it) and the knowledge-base answer the
  * "Add to KB" case promotes from the seeded demo RFP, and the knowledge-base
  * entry the KB suite creates, CHRO questions and exports (rows, jobs and
- * blobs) on the demo RFP, and the dev consultant's role.
+ * stored files) on the demo RFP, and the dev consultant's role.
  *
  * Usage: node scripts/e2e-cleanup.mjs
  */
@@ -37,8 +37,9 @@ const exportJobs = await c.query(`delete from generation_jobs where job_type = '
 const { rowCount } = await c.query(`delete from rfps where title = 'E2E smoke RFP'`);
 await c.end();
 const urls = [...exportRows.rows.map((r) => r.file_url), ...quickBlobs.rows.map((r) => r.url)].filter(Boolean);
-if (urls.length && process.env.BLOB_READ_WRITE_TOKEN) {
-  const { del } = await import("@vercel/blob");
-  await del(urls);
+if (urls.length) {
+  // Keys and legacy Blob URLs alike go through the app's adapter; a retired store only warns.
+  const { execFileSync } = await import("node:child_process");
+  execFileSync("pnpm", ["exec", "tsx", "scripts/storage-delete.ts"], { input: JSON.stringify(urls), stdio: ["pipe", "inherit", "inherit"] });
 }
 console.log(`removed ${rowCount} E2E smoke RFP(s), ${quick.rowCount} quick session(s) (${quickAnswers.rowCount} precedent(s)), ${exportRows.rowCount} demo export(s) (${urls.length} file(s), ${exportJobs.rowCount} job(s)), ${answers.rowCount} promoted demo answer(s), ${entries.rowCount} smoke KB entr${entries.rowCount === 1 ? 'y' : 'ies'}, ${chro.rowCount} demo CHRO question(s) and reset ${roles.rowCount} fixture role(s)`);
