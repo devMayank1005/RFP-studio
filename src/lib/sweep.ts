@@ -1,4 +1,3 @@
-import { list } from "@vercel/blob";
 import { and, inArray, isNotNull, lt, sql } from "drizzle-orm";
 
 import { db } from "@/db/client";
@@ -7,8 +6,9 @@ import { finishKbSource } from "@/db/kb-ingest";
 import { finishExportRow } from "@/db/queries/exports";
 import { exports as exportsTable, generationJobs, kbSources, rfpDocuments, rfps } from "@/db/schema";
 import { STALE_RUN_MS, classifyJobs, orphanBlobs, type BlobFile } from "@/domain/sweep";
-import { deletePrivate } from "@/lib/blob";
-import { reportError } from "@/lib/report";
+import { StorageUnavailableError } from "@/domain/storage";
+import { deletePrivate, listPrivate } from "@/lib/blob";
+import { reportError, reportEvent } from "@/lib/report";
 
 /**
  * The sweeper's two halves: `planSweep` reads and decides (the rules are pure,
@@ -35,15 +35,21 @@ export interface SweepPlan {
   scanned: number;
 }
 
-/** Every file under a prefix, page by page. */
+/** Every file under a prefix, page by page. A suspended or unreachable store lists nothing (and is reported), so the rest of the sweep still runs. */
 async function listAll(prefix: string): Promise<BlobFile[]> {
   const out: BlobFile[] = [];
   let cursor: string | undefined;
-  do {
-    const page = await list({ prefix, cursor, limit: 1000 });
-    for (const b of page.blobs) out.push({ pathname: b.pathname, url: b.url, uploadedAt: b.uploadedAt });
-    cursor = page.hasMore ? page.cursor : undefined;
-  } while (cursor);
+  try {
+    do {
+      const page = await listPrivate(prefix, cursor);
+      for (const b of page.blobs) out.push({ pathname: b.pathname, url: b.url, uploadedAt: b.uploadedAt });
+      cursor = page.hasMore ? page.cursor : undefined;
+    } while (cursor);
+  } catch (err) {
+    if (!(err instanceof StorageUnavailableError)) throw err;
+    reportEvent("sweep.storage_unavailable", { prefix, reason: err.message });
+    return [];
+  }
   return out;
 }
 

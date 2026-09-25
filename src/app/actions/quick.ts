@@ -13,6 +13,7 @@ import { generationJobs, responses, rfpDocuments, rfpQuestions, rfps } from "@/d
 import { todayInKolkata } from "@/domain/dates";
 import { isStaleQueuedJob } from "@/domain/jobs";
 import { firstLine, pastedDocument, quickInputSchema, quickTitle } from "@/domain/quick";
+import { StorageUnavailableError } from "@/domain/storage";
 import { engineConfigError } from "@/engine/client";
 import { embedConfigError } from "@/engine/embed";
 import { quickRequested } from "@/inngest/client";
@@ -48,6 +49,7 @@ export async function createQuickSession(_prev: QuickCreateState, formData: Form
     rfpId = await createQuick(formData);
   } catch (err) {
     if (err instanceof ActionError) return { ok: false, error: err.message, fieldErrors: err.fieldErrors };
+    if (err instanceof StorageUnavailableError) return { ok: false, error: err.message };
     throw err;
   }
   redirect(pagePath(rfpId));

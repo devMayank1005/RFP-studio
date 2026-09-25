@@ -6,6 +6,7 @@ import type { ZodType } from "zod";
 import { db } from "@/db/client";
 import { rfps } from "@/db/schema";
 import { can, type Action } from "@/domain/access";
+import { StorageUnavailableError } from "@/domain/storage";
 import { reportError } from "@/lib/report";
 import { requireSession, type AppSession } from "@/lib/session";
 
@@ -75,6 +76,8 @@ export async function runAction<T>(body: () => Promise<T>): Promise<ActionResult
     return ok(await body());
   } catch (err) {
     if (err instanceof ActionError) return fail(err.message, err.fieldErrors);
+    // Storage helpers already logged the cause; the message is written for the form.
+    if (err instanceof StorageUnavailableError) return fail(err.message);
     reportError(err, { where: "action" });
     throw err;
   }

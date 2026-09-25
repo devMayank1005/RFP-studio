@@ -1,11 +1,30 @@
 
-import { del, get, put } from "@vercel/blob";
+import { del, get, list, put } from "@vercel/blob";
+
+import { StorageUnavailableError, describeStorageFailure } from "@/domain/storage";
+import { reportError } from "@/lib/report";
 
 /**
  * Vercel Blob, private access only — RFPs are client-confidential. Nothing
  * here is ever served to the browser directly; the app reads blobs
  * server-side and streams what it must.
+ *
+ * Every SDK call goes through `withStorage`: a suspended store or a bad token
+ * becomes a StorageUnavailableError with a sentence the form can show, and
+ * the original error is logged with the pathname. Before this, a suspended
+ * store surfaced as the crash screen with a digest and nothing else.
  */
+
+async function withStorage<T>(pathname: string, fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    const description = err instanceof Error ? describeStorageFailure(err) : null;
+    if (!description) throw err;
+    reportError(err, { where: "storage", pathname });
+    throw new StorageUnavailableError(description, { cause: err });
+  }
+}
 
 function safeName(name: string): string {
   return name.replace(/[^\w.\-]+/g, "_").slice(0, 120);
@@ -17,11 +36,13 @@ function safeName(name: string): string {
  * @sideEffects Writes to Vercel Blob.
  */
 export async function uploadPrivate(pathname: string, body: Blob | Buffer | ArrayBuffer | string, contentType?: string) {
-  const result = await put(pathname, body, {
-    access: "private",
-    addRandomSuffix: true,
-    ...(contentType ? { contentType } : {}),
-  });
+  const result = await withStorage(pathname, () =>
+    put(pathname, body, {
+      access: "private",
+      addRandomSuffix: true,
+      ...(contentType ? { contentType } : {}),
+    }),
+  );
   return { url: result.url, pathname: result.pathname };
 }
 
@@ -50,7 +71,7 @@ export function rfpParsedPath(rfpId: string, documentId: string): string {
  * @throws {Error} When the blob is missing or not readable.
  */
 export async function readPrivate(url: string): Promise<Buffer> {
-  const result = await get(url, { access: "private", useCache: false });
+  const result = await withStorage(url, () => get(url, { access: "private", useCache: false }));
   if (!result || result.statusCode !== 200) throw new Error(`blob not readable: ${url}`);
   return Buffer.from(await new Response(result.stream).arrayBuffer());
 }
@@ -77,10 +98,17 @@ export async function getJson<T>(url: string): Promise<T> {
  * @sideEffects Deletes from Vercel Blob.
  */
 export async function deletePrivate(urls: string[]) {
-  if (urls.length) await del(urls);
+  await withStorage(urls[0] ?? "(none)", async () => {
+    if (urls.length) await del(urls);
+  });
 }
 
 /** Where a built export lives: `rfps/{rfpId}/exports/{file}` (private, like everything else here). */
 export function rfpExportPath(rfpId: string, fileName: string): string {
   return `rfps/${rfpId}/exports/${safeName(fileName)}`;
+}
+
+/** One page of a private listing under a prefix; the sweeper walks the cursor. */
+export async function listPrivate(prefix: string, cursor?: string) {
+  return withStorage(prefix, () => list({ prefix, cursor, limit: 1000 }));
 }
